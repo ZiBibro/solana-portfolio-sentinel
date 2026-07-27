@@ -1,5 +1,7 @@
 # solana-portfolio-sentinel
 
+[![CI](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml)
+
 ZeroClaw tool plugins that let an agent watch a Solana portfolio and hand back
 an unsigned transaction when something needs doing. Two of them read: how close
 a DeFi borrow position sits to liquidation, and what the operator's own stake
