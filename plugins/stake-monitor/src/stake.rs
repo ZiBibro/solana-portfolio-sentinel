@@ -1,0 +1,803 @@
+//! Pure core of the `stake_monitor` tool: config parsing, JSON-RPC request
+//! construction, response parsing, status derivation, and report rendering.
+//! No wasm and no I/O in here, so the whole module runs under a plain host
+//! `cargo test`.
+//!
+//! Response shapes were verified against live mainnet RPC calls on
+//! 2026-07-18: `getEpochInfo`, `getVoteAccounts` (with the `votePubkey`
+//! filter), `getAccountInfo` (jsonParsed), and `getInflationReward`.
+//! Numeric delegation fields arrive as decimal strings; an active stake has
+//! `deactivationEpoch` equal to u64::MAX rendered as a string. Vote lag and
+//! epoch progress are derived from fields those same replies already carry,
+//! so neither reading costs an extra call.
+
+use std::collections::HashMap;
+
+use serde_json::Value;
+
+/// Hard cap for the delivered payload, in characters: the rendered report and
+/// the data-issues line together. Keeps the tool output around 200 tokens so a
+/// scheduled briefing never floods the agent context.
+pub const REPORT_CHAR_CAP: usize = 900;
+
+/// Share of [`REPORT_CHAR_CAP`] the data-issues line may claim. The account
+/// rows are what the briefing is for, so a run that collected a long list of
+/// failed reads still leaves two thirds of the payload to them.
+const ISSUE_CHAR_BUDGET: usize = REPORT_CHAR_CAP / 3;
+
+const ISSUE_PREFIX: &str = "\nData issues: ";
+
+const ISSUE_SEPARATOR: &str = "; ";
+
+pub const DEFAULT_TIMEOUT_SECS: u64 = 10;
+
+const CONFIG_KEYS: [&str; 4] = [
+    "stake_accounts",
+    "rpc_url",
+    "vote_lag_warn_slots",
+    "timeout_secs",
+];
+
+const LAMPORTS_PER_SOL: f64 = 1_000_000_000.0;
+
+/// Average slot time used only for the human "epoch ends in ~N h" hint.
+const SECONDS_PER_SLOT: f64 = 0.4;
+
+/// Slots behind the chain tip at which `getVoteAccounts` already reports a
+/// vote account as delinquent: the `delinquentSlotDistance` default the RPC
+/// applies when the call leaves that parameter out. A warn threshold above it
+/// could only fire after the verdict it is meant to precede, so it is the
+/// upper bound for `vote_lag_warn_slots`.
+pub const DELINQUENT_SLOT_DISTANCE: u64 = 128;
+
+/// Default vote lag, in slots, past which a still-voting validator is called
+/// out as drifting. A quarter of [`DELINQUENT_SLOT_DISTANCE`] is roughly 13
+/// seconds of missed voting: early enough to act on, and far enough above
+/// normal jitter to stay quiet on a healthy node. Operators who want a
+/// different balance set the `vote_lag_warn_slots` config key.
+pub const DEFAULT_VOTE_LAG_WARN_SLOTS: u64 = 32;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StakeAccountRef {
+    pub label: String,
+    pub pubkey: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub accounts: Vec<StakeAccountRef>,
+    pub rpc_url: String,
+    pub vote_lag_warn_slots: u64,
+    pub timeout_secs: u64,
+}
+
+impl Config {
+    /// Parses the host-injected `__config` section. Fail-closed: any unknown
+    /// key is an error, so a typo surfaces immediately.
+    pub fn from_section(section: &HashMap<String, String>) -> Result<Self, String> {
+        for key in section.keys() {
+            if !CONFIG_KEYS.contains(&key.as_str()) {
+                return Err(format!(
+                    "unknown config key `{key}`; expected one of: {}",
+                    CONFIG_KEYS.join(", ")
+                ));
+            }
+        }
+
+        let accounts = parse_accounts(section.get("stake_accounts").ok_or(
+            "config key `stake_accounts` is required: a comma-separated allowlist like `main:<pubkey>` or bare pubkeys",
+        )?)?;
+
+        let rpc_url = section
+            .get("rpc_url")
+            .ok_or("config key `rpc_url` is required")?
+            .trim()
+            .trim_end_matches('/')
+            .to_string();
+        if !rpc_url.starts_with("https://") {
+            return Err(format!("rpc_url must be an https:// URL, got `{rpc_url}`"));
+        }
+
+        let vote_lag_warn_slots = match section.get("vote_lag_warn_slots") {
+            Some(raw) => raw.trim().parse::<u64>().map_err(|_| {
+                format!("vote_lag_warn_slots must be a positive integer, got `{raw}`")
+            })?,
+            None => DEFAULT_VOTE_LAG_WARN_SLOTS,
+        };
+        if vote_lag_warn_slots == 0 || vote_lag_warn_slots > DELINQUENT_SLOT_DISTANCE {
+            return Err(format!(
+                "vote_lag_warn_slots must be between 1 and {DELINQUENT_SLOT_DISTANCE}, got {vote_lag_warn_slots}"
+            ));
+        }
+
+        let timeout_secs = match section.get("timeout_secs") {
+            Some(raw) => raw
+                .trim()
+                .parse::<u64>()
+                .map_err(|_| format!("timeout_secs must be a positive integer, got `{raw}`"))?,
+            None => DEFAULT_TIMEOUT_SECS,
+        };
+        if timeout_secs == 0 || timeout_secs > 60 {
+            return Err(format!(
+                "timeout_secs must be between 1 and 60, got {timeout_secs}"
+            ));
+        }
+
+        Ok(Config {
+            accounts,
+            rpc_url,
+            vote_lag_warn_slots,
+            timeout_secs,
+        })
+    }
+
+    /// Resolves the optional `account` argument against the allowlist. The
+    /// model can only pick a configured account, never introduce a new one.
+    pub fn resolve_account(
+        &self,
+        requested: Option<&str>,
+    ) -> Result<Vec<&StakeAccountRef>, String> {
+        match requested {
+            None => Ok(self.accounts.iter().collect()),
+            Some(query) => {
+                let q = query.trim();
+                let hit: Vec<&StakeAccountRef> = self
+                    .accounts
+                    .iter()
+                    .filter(|a| a.label == q || a.pubkey == q)
+                    .collect();
+                if hit.is_empty() {
+                    Err(format!(
+                        "stake account `{q}` is not in the configured allowlist; known labels: {}",
+                        self.accounts
+                            .iter()
+                            .map(|a| a.label.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ))
+                } else {
+                    Ok(hit)
+                }
+            }
+        }
+    }
+}
+
+fn parse_accounts(raw: &str) -> Result<Vec<StakeAccountRef>, String> {
+    let mut out = Vec::new();
+    for (i, entry) in raw
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .enumerate()
+    {
+        let (label, pubkey) = match entry.split_once(':') {
+            Some((l, p)) => (l.trim().to_string(), p.trim().to_string()),
+            None => (format!("stake{}", i + 1), entry.to_string()),
+        };
+        validate_pubkey(&pubkey)?;
+        if out.iter().any(|a: &StakeAccountRef| a.label == label) {
+            return Err(format!("duplicate stake account label `{label}`"));
+        }
+        out.push(StakeAccountRef { label, pubkey });
+    }
+    if out.is_empty() {
+        return Err("config key `stake_accounts` must contain at least one entry".to_string());
+    }
+    Ok(out)
+}
+
+pub fn validate_pubkey(candidate: &str) -> Result<(), String> {
+    let bytes = bs58::decode(candidate)
+        .into_vec()
+        .map_err(|_| format!("`{candidate}` is not valid base58"))?;
+    if bytes.len() != 32 {
+        return Err(format!(
+            "`{candidate}` is not a valid Solana pubkey (decoded {} bytes, expected 32)",
+            bytes.len()
+        ));
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// JSON-RPC request bodies
+// ---------------------------------------------------------------------------
+
+pub fn epoch_info_body() -> String {
+    serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "getEpochInfo", "params": []
+    })
+    .to_string()
+}
+
+pub fn stake_account_body(pubkey: &str) -> String {
+    serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "getAccountInfo",
+        "params": [pubkey, { "encoding": "jsonParsed" }]
+    })
+    .to_string()
+}
+
+/// One vote account, filtered server-side so the response stays tiny instead
+/// of the full 700-validator roster.
+pub fn vote_account_body(vote_pubkey: &str) -> String {
+    serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "getVoteAccounts",
+        "params": [{ "votePubkey": vote_pubkey }]
+    })
+    .to_string()
+}
+
+pub fn inflation_reward_body(pubkeys: &[String], epoch: u64) -> String {
+    serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "getInflationReward",
+        "params": [pubkeys, { "epoch": epoch }]
+    })
+    .to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Response parsing
+// ---------------------------------------------------------------------------
+
+fn rpc_result(body: &str) -> Result<Value, String> {
+    let root: Value =
+        serde_json::from_str(body).map_err(|e| format!("RPC reply is not JSON: {e}"))?;
+    if let Some(err) = root.get("error") {
+        let msg = err.get("message").and_then(Value::as_str).unwrap_or("?");
+        return Err(format!("RPC error: {msg}"));
+    }
+    root.get("result")
+        .cloned()
+        .ok_or_else(|| "RPC reply has no result".to_string())
+}
+
+/// Slot counters that describe a real epoch. The fields are private and the
+/// only way in is [`EpochProgress::new`], so every reading below rests on the
+/// invariant it checks: a non-zero epoch length with an index inside it.
+#[derive(Debug, Clone, Copy)]
+pub struct EpochProgress {
+    slot_index: u64,
+    slots_in_epoch: u64,
+}
+
+impl EpochProgress {
+    /// `None` when the counters cannot describe an epoch: a zero-length one,
+    /// or an index past its end. Both would poison the progress figure and
+    /// the "hours left" hint, so they yield no reading at all.
+    pub fn new(slot_index: u64, slots_in_epoch: u64) -> Option<Self> {
+        if slots_in_epoch == 0 || slot_index > slots_in_epoch {
+            return None;
+        }
+        Some(EpochProgress {
+            slot_index,
+            slots_in_epoch,
+        })
+    }
+
+    pub fn hours_to_end(&self) -> u64 {
+        let slots_left = self.slots_in_epoch - self.slot_index;
+        (slots_left as f64 * SECONDS_PER_SLOT / 3600.0).round() as u64
+    }
+
+    /// How far the network has moved into the current epoch, in whole
+    /// percent. Widened to u128 so a hostile pair of counters cannot overflow
+    /// the multiplication; the constructor's invariant already caps the
+    /// result at 100.
+    pub fn pct(&self) -> u64 {
+        (self.slot_index as u128 * 100 / self.slots_in_epoch as u128) as u64
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EpochInfo {
+    pub epoch: u64,
+    /// Network head at the time of the reply, and the reference point for
+    /// every validator's vote lag. `None` when the reply carried no
+    /// `absoluteSlot`, in which case lag reads as unknown rather than being
+    /// measured against an invented head.
+    pub absolute_slot: Option<u64>,
+    /// `None` when the reply carried no usable slot counters, which costs the
+    /// progress figure and nothing else.
+    pub progress: Option<EpochProgress>,
+}
+
+/// Reads a `getEpochInfo` reply. Only the epoch number is load-bearing, since
+/// the delegation lifecycle is derived from it. The head slot and the slot
+/// counters degrade on their own: a reply missing `absoluteSlot`, or carrying
+/// counters that cannot describe a real epoch, costs the vote-lag reading and
+/// the progress figure while every other line of the report still renders.
+pub fn parse_epoch_info(body: &str) -> Result<EpochInfo, String> {
+    let r = rpc_result(body)?;
+    let epoch = r
+        .get("epoch")
+        .and_then(Value::as_u64)
+        .ok_or("epoch missing")?;
+    let progress = match (
+        r.get("slotIndex").and_then(Value::as_u64),
+        r.get("slotsInEpoch").and_then(Value::as_u64),
+    ) {
+        (Some(index), Some(len)) => EpochProgress::new(index, len),
+        _ => None,
+    };
+    Ok(EpochInfo {
+        epoch,
+        absolute_slot: r.get("absoluteSlot").and_then(Value::as_u64),
+        progress,
+    })
+}
+
+#[derive(Debug, Clone)]
+pub struct Delegation {
+    pub voter: String,
+    pub stake_lamports: u64,
+    pub activation_epoch: u64,
+    pub deactivation_epoch: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct StakeState {
+    pub lamports: u64,
+    pub delegation: Option<Delegation>,
+}
+
+/// Delegation numbers arrive as decimal strings (u64 as string), with
+/// u64::MAX meaning "no deactivation scheduled".
+fn str_u64(v: &Value) -> Option<u64> {
+    match v {
+        Value::String(s) => s.trim().parse::<u64>().ok(),
+        Value::Number(n) => n.as_u64(),
+        _ => None,
+    }
+}
+
+pub fn parse_stake_account(body: &str) -> Result<StakeState, String> {
+    let r = rpc_result(body)?;
+    let value = r
+        .get("value")
+        .filter(|v| !v.is_null())
+        .ok_or("stake account not found on chain")?;
+    let lamports = value
+        .get("lamports")
+        .and_then(Value::as_u64)
+        .ok_or("lamports missing")?;
+    let parsed = value
+        .get("data")
+        .and_then(|d| d.get("parsed"))
+        .ok_or("account is not jsonParsed; is this a stake account?")?;
+    let program = value
+        .get("data")
+        .and_then(|d| d.get("program"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if program != "stake" {
+        return Err(format!(
+            "account is owned by `{program}`; expected a stake account"
+        ));
+    }
+
+    let delegation = parsed
+        .get("info")
+        .and_then(|i| i.get("stake"))
+        .filter(|s| !s.is_null())
+        .and_then(|s| s.get("delegation"))
+        .and_then(|d| {
+            Some(Delegation {
+                voter: d.get("voter")?.as_str()?.to_string(),
+                stake_lamports: str_u64(d.get("stake")?)?,
+                activation_epoch: str_u64(d.get("activationEpoch")?)?,
+                deactivation_epoch: str_u64(d.get("deactivationEpoch")?)?,
+            })
+        });
+
+    Ok(StakeState {
+        lamports,
+        delegation,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValidatorStatus {
+    Ok {
+        commission_bps: u64,
+        last_vote_slot: Option<u64>,
+    },
+    Delinquent {
+        commission_bps: u64,
+        last_vote_slot: Option<u64>,
+    },
+    Unknown,
+}
+
+impl ValidatorStatus {
+    /// Slots between the network head and this validator's last vote. `None`
+    /// when the epoch reply carried no head slot, when the vote record
+    /// carried no usable `lastVote`, or when the validator was not found at
+    /// all, so an unread number never renders as a healthy zero.
+    pub fn vote_lag(&self, absolute_slot: Option<u64>) -> Option<u64> {
+        let head = absolute_slot?;
+        match self {
+            ValidatorStatus::Ok { last_vote_slot, .. }
+            | ValidatorStatus::Delinquent { last_vote_slot, .. } => {
+                last_vote_slot.map(|slot| head.saturating_sub(slot))
+            }
+            ValidatorStatus::Unknown => None,
+        }
+    }
+
+    /// True when the validator still counts as current but its votes are
+    /// drifting past `warn_slots`, the operator's `vote_lag_warn_slots`. This
+    /// is the pre-delinquency signal; a validator the RPC already calls
+    /// delinquent is reported as delinquent and is not double-flagged here.
+    pub fn is_behind(&self, absolute_slot: Option<u64>, warn_slots: u64) -> bool {
+        matches!(self, ValidatorStatus::Ok { .. })
+            && self
+                .vote_lag(absolute_slot)
+                .is_some_and(|lag| lag > warn_slots)
+    }
+}
+
+/// Reads a `getVoteAccounts` reply that was filtered by `votePubkey`.
+/// Commission is taken from `inflationRewardsCommissionBps` when present,
+/// with the legacy percentage `commission` as the fallback, because the
+/// modern field is authoritative and the legacy one can lag. `lastVote` is
+/// kept for the vote-lag reading; the RPC reports `0` for a vote account
+/// that has never voted, which is an absent vote rather than a lag of the
+/// whole chain history, so it is read as unknown.
+pub fn parse_vote_status(body: &str, voter: &str) -> Result<ValidatorStatus, String> {
+    let r = rpc_result(body)?;
+    let pick = |list: &str| -> Option<(u64, Option<u64>)> {
+        r.get(list)?
+            .as_array()?
+            .iter()
+            .find(|v| v.get("votePubkey").and_then(Value::as_str) == Some(voter))
+            .map(|v| {
+                let commission_bps = v
+                    .get("inflationRewardsCommissionBps")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_else(|| {
+                        v.get("commission").and_then(Value::as_u64).unwrap_or(0) * 100
+                    });
+                let last_vote_slot = v
+                    .get("lastVote")
+                    .and_then(Value::as_u64)
+                    .filter(|slot| *slot > 0);
+                (commission_bps, last_vote_slot)
+            })
+    };
+    if let Some((commission_bps, last_vote_slot)) = pick("current") {
+        return Ok(ValidatorStatus::Ok {
+            commission_bps,
+            last_vote_slot,
+        });
+    }
+    if let Some((commission_bps, last_vote_slot)) = pick("delinquent") {
+        return Ok(ValidatorStatus::Delinquent {
+            commission_bps,
+            last_vote_slot,
+        });
+    }
+    Ok(ValidatorStatus::Unknown)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Reward {
+    pub amount_lamports: u64,
+    pub commission_bps: Option<u64>,
+}
+
+/// Reads a `getInflationReward` reply: one entry per requested address,
+/// null when the address earned nothing that epoch. The modern field is
+/// `commissionBps`; the legacy `commission` can be null even when a reward
+/// exists, so it is only a fallback.
+pub fn parse_inflation_rewards(body: &str, expected: usize) -> Result<Vec<Option<Reward>>, String> {
+    let r = rpc_result(body)?;
+    let arr = r
+        .as_array()
+        .ok_or("getInflationReward result is not an array")?;
+    if arr.len() != expected {
+        return Err(format!(
+            "getInflationReward returned {} entries, expected {expected}",
+            arr.len()
+        ));
+    }
+    Ok(arr
+        .iter()
+        .map(|v| {
+            if v.is_null() {
+                return None;
+            }
+            Some(Reward {
+                amount_lamports: v.get("amount").and_then(Value::as_u64)?,
+                commission_bps: v
+                    .get("commissionBps")
+                    .and_then(Value::as_u64)
+                    .or_else(|| v.get("commission").and_then(Value::as_u64).map(|c| c * 100)),
+            })
+        })
+        .collect())
+}
+
+// ---------------------------------------------------------------------------
+// Status derivation and rendering
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StakeStatus {
+    NotDelegated,
+    Activating,
+    Active,
+    Deactivating,
+    Inactive,
+}
+
+impl StakeStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            StakeStatus::NotDelegated => "not delegated",
+            StakeStatus::Activating => "activating",
+            StakeStatus::Active => "active",
+            StakeStatus::Deactivating => "deactivating",
+            StakeStatus::Inactive => "inactive",
+        }
+    }
+}
+
+pub fn derive_status(delegation: Option<&Delegation>, current_epoch: u64) -> StakeStatus {
+    match delegation {
+        None => StakeStatus::NotDelegated,
+        Some(d) => {
+            if d.deactivation_epoch == u64::MAX {
+                if current_epoch <= d.activation_epoch {
+                    StakeStatus::Activating
+                } else {
+                    StakeStatus::Active
+                }
+            } else if current_epoch <= d.deactivation_epoch {
+                StakeStatus::Deactivating
+            } else {
+                StakeStatus::Inactive
+            }
+        }
+    }
+}
+
+/// One fully assembled report row.
+#[derive(Debug, Clone)]
+pub struct Entry {
+    pub label: String,
+    pub state: StakeState,
+    pub status: StakeStatus,
+    pub validator: Option<ValidatorStatus>,
+    pub reward: Option<Reward>,
+}
+
+fn fmt_sol(lamports: u64) -> String {
+    let sol = lamports as f64 / LAMPORTS_PER_SOL;
+    if sol >= 100.0 {
+        format!("{sol:.0}")
+    } else {
+        format!("{sol:.3}")
+    }
+}
+
+/// One short vote-lag field. An unreadable `lastVote`, or an epoch reply that
+/// carried no head slot to measure against, prints `unknown` instead of a
+/// fabricated slot count.
+fn fmt_vote_lag(validator: &ValidatorStatus, epoch: &EpochInfo, warn_slots: u64) -> String {
+    match validator.vote_lag(epoch.absolute_slot) {
+        Some(lag) if validator.is_behind(epoch.absolute_slot, warn_slots) => {
+            format!("vote lag {lag} slot(s) BEHIND")
+        }
+        Some(lag) => format!("vote lag {lag} slot(s)"),
+        None => "vote lag unknown".to_string(),
+    }
+}
+
+/// The payload the tool delivers: the report, plus one trailing line naming
+/// the reads that failed. The suffix is measured before the rows are rendered
+/// and its room comes out of the rendering budget, so [`REPORT_CHAR_CAP`]
+/// bounds everything the agent receives instead of only the part above the
+/// suffix. The suffix itself never claims more than [`ISSUE_CHAR_BUDGET`], so
+/// a run where every account failed still delivers a readable report.
+pub fn render_payload(
+    entries: &[Entry],
+    epoch: &EpochInfo,
+    cfg: &Config,
+    issues: &[String],
+) -> String {
+    let suffix = render_issues(issues);
+    let report = render_within(
+        entries,
+        epoch,
+        cfg,
+        REPORT_CHAR_CAP.saturating_sub(suffix.len()),
+    );
+    format!("{report}{suffix}")
+}
+
+/// Error text for a run where every stake account read failed, so there is no
+/// report to deliver. The detail is the issue list rendered under
+/// [`ISSUE_CHAR_BUDGET`], the bound the success path applies as well, since the
+/// strings inside it were written by whatever server answered the RPC.
+pub fn render_total_failure(issues: &[String]) -> String {
+    let listed = render_issues(issues);
+    // `render_issues` writes the trailing line of a report: a leading newline,
+    // then a `Data issues: ` label. Neither belongs in a one-sentence error, so
+    // both come off before the detail behind them is reused.
+    let detail = listed
+        .trim_start_matches('\n')
+        .trim_start_matches("Data issues: ");
+    format!("every stake account read failed: {detail}")
+}
+
+/// One line naming the reads that failed, empty when the run hit no trouble.
+/// Issues past the budget are counted rather than spelled out, so a pile of
+/// long RPC errors cannot push the payload past the cap.
+fn render_issues(issues: &[String]) -> String {
+    if issues.is_empty() {
+        return String::new();
+    }
+    // No issue is dropped for free: whatever the budget pushes out is counted
+    // in a marker whose room is reserved up front, at the widest count it
+    // could carry.
+    let reserve = ISSUE_SEPARATOR.len() + omitted_issues(issues.len()).len();
+    let mut kept: Vec<&str> = Vec::new();
+    let mut used = ISSUE_PREFIX.len();
+    for issue in issues {
+        let cost = issue.len()
+            + if kept.is_empty() {
+                0
+            } else {
+                ISSUE_SEPARATOR.len()
+            };
+        if used + cost > ISSUE_CHAR_BUDGET.saturating_sub(reserve) {
+            break;
+        }
+        used += cost;
+        kept.push(issue.as_str());
+    }
+    let omitted = issues.len() - kept.len();
+    let mut line = format!("{ISSUE_PREFIX}{}", kept.join(ISSUE_SEPARATOR));
+    if omitted > 0 {
+        if !kept.is_empty() {
+            line.push_str(ISSUE_SEPARATOR);
+        }
+        line.push_str(&omitted_issues(omitted));
+    }
+    line
+}
+
+fn omitted_issues(count: usize) -> String {
+    format!("(+{count} more)")
+}
+
+fn omitted_lines(count: usize) -> String {
+    format!("(+{count} more line(s) omitted)")
+}
+
+/// The account rows on their own, at the full [`REPORT_CHAR_CAP`] budget. A
+/// run that also has failed reads to report goes through [`render_payload`],
+/// which shares the same budget between the rows and the data-issues line.
+pub fn render_report(entries: &[Entry], epoch: &EpochInfo, cfg: &Config) -> String {
+    render_within(entries, epoch, cfg, REPORT_CHAR_CAP)
+}
+
+/// Renders the account rows within `budget` characters. Lowest lines drop
+/// first, since the header carries the summary the operator reads before
+/// anything else.
+fn render_within(entries: &[Entry], epoch: &EpochInfo, cfg: &Config, budget: usize) -> String {
+    if entries.is_empty() {
+        return "No stake accounts to report.".to_string();
+    }
+
+    let total: u64 = entries
+        .iter()
+        .map(|e| e.state.delegation.as_ref().map_or(0, |d| d.stake_lamports))
+        .sum();
+    let delinquent = entries
+        .iter()
+        .filter(|e| matches!(e.validator, Some(ValidatorStatus::Delinquent { .. })))
+        .count();
+    let behind = entries
+        .iter()
+        .filter(|e| {
+            e.validator
+                .as_ref()
+                .is_some_and(|v| v.is_behind(epoch.absolute_slot, cfg.vote_lag_warn_slots))
+        })
+        .count();
+
+    // A degraded epoch reply costs the progress figure and says so, rather
+    // than printing a percentage nothing supports.
+    let epoch_part = match &epoch.progress {
+        Some(p) => format!(
+            "epoch {} at {}% (~{} h left)",
+            epoch.epoch,
+            p.pct(),
+            p.hours_to_end()
+        ),
+        None => format!("epoch {} (progress unknown)", epoch.epoch),
+    };
+
+    let mut lines = vec![format!(
+        "Stake: {} account(s), {} SOL delegated, {epoch_part}.{}{}",
+        entries.len(),
+        fmt_sol(total),
+        if delinquent > 0 {
+            format!(" {delinquent} validator(s) DELINQUENT.")
+        } else {
+            String::new()
+        },
+        if behind > 0 {
+            format!(" {behind} validator(s) BEHIND.")
+        } else {
+            String::new()
+        }
+    )];
+
+    for e in entries {
+        let mut parts = vec![format!(
+            "[{}] {}: {} SOL",
+            e.status.as_str(),
+            e.label,
+            fmt_sol(
+                e.state
+                    .delegation
+                    .as_ref()
+                    .map_or(e.state.lamports, |d| d.stake_lamports)
+            )
+        )];
+        if let Some(d) = &e.state.delegation {
+            let voter_short: String = d.voter.chars().take(4).collect();
+            let vstat = match &e.validator {
+                Some(v @ ValidatorStatus::Ok { commission_bps, .. }) => {
+                    format!(
+                        "validator {voter_short}.. ok, {}, fee {:.1}%",
+                        fmt_vote_lag(v, epoch, cfg.vote_lag_warn_slots),
+                        *commission_bps as f64 / 100.0
+                    )
+                }
+                Some(v @ ValidatorStatus::Delinquent { .. }) => {
+                    format!(
+                        "validator {voter_short}.. DELINQUENT, {}",
+                        fmt_vote_lag(v, epoch, cfg.vote_lag_warn_slots)
+                    )
+                }
+                Some(ValidatorStatus::Unknown) => format!("validator {voter_short}.. not found"),
+                None => format!("validator {voter_short}.."),
+            };
+            parts.push(vstat);
+        }
+        match &e.reward {
+            Some(r) => parts.push(format!("last reward {} SOL", fmt_sol(r.amount_lamports))),
+            None => {
+                if e.status == StakeStatus::Active {
+                    parts.push("no reward last epoch".to_string());
+                }
+            }
+        }
+        lines.push(parts.join(", "));
+    }
+
+    let mut report = lines.join("\n");
+    if report.len() > budget {
+        // Room for the marker is reserved at the widest count it could carry,
+        // so the truncated report is provably inside the budget.
+        let reserve = omitted_lines(lines.len()).len();
+        let mut kept = Vec::new();
+        let mut used = 0usize;
+        for line in &lines {
+            if used + line.len() + 1 > budget.saturating_sub(reserve) {
+                break;
+            }
+            used += line.len() + 1;
+            kept.push(line.clone());
+        }
+        let omitted = lines.len() - kept.len();
+        kept.push(omitted_lines(omitted));
+        report = kept.join("\n");
+    }
+    report
+}
