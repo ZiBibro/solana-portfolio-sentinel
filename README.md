@@ -23,8 +23,12 @@ host test suite exercises without a wasm toolchain, and a thin
 Reads Kamino positions from the public Kamino REST API and decodes MarginFi
 positions from on-chain account state via `getProgramAccounts`, at the byte
 offsets where the program keeps its maintenance-weighted health cache. Each
-position is classified OK/WARN/CRITICAL against operator-set LTV thresholds,
-and each line names the obligation it came from.
+position is classified against operator-set thresholds on the liquidation
+buffer, the share of the distance to its own liquidation line that a position
+still has left, which is the quantity Kamino documents as the one that matters.
+A position whose basis is missing or unusable is reported as UNKNOWN, and one
+with no debt is reported as such, so no verdict is issued without a measurement
+behind it. Each line names the obligation it came from.
 
 When MarginFi's maintenance pair is absent, the report states that no
 liquidation distance is available instead of computing one on a basis it cannot
@@ -75,9 +79,18 @@ Structural rather than prompt-based, in four parts:
 - **Fail-closed config.** An unknown or misspelled key is a hard error, not a
   silent default, so a typo like `max_amout` cannot quietly restore a wider
   limit.
-- **Bounded output.** Tool arguments reject unknown fields, upstream error
-  bodies are never echoed into the agent context, and both the report and the
-  failure paths share one character cap.
+- **Bounded output.** Tool arguments reject unknown fields, and both the report
+  and the failure paths share one character cap. Text an outside party controls,
+  such as a Kamino product tag or the `message` field of a JSON-RPC error, is
+  treated as untrusted input to the model: it is presented as an explicit
+  quotation, stripped of control characters, narrowed in character class where
+  the field allows it, and capped, so it can carry a diagnostic without carrying
+  an instruction.
+
+Custody tiers, in the terms the ZeroClaw ladder uses: `lending-health` and
+`stake-monitor` are **T0 Read**, and `stake-tx-build` is **T1 Build**. The most
+sensitive secret any of them holds is an RPC endpoint URL. No private key
+appears in config or code, and nothing here can sign or submit.
 
 Each plugin README carries a threat model and a live transcript of a
 prompt-injection attempt being refused.
@@ -107,13 +120,18 @@ Host tests run without a wasm toolchain and without network access:
 
 | plugin | host tests |
 |---|---|
-| lending-health | 59 |
-| stake-monitor | 35 |
-| stake-tx-build | 36 |
+| lending-health | 73 |
+| stake-monitor | 38 |
+| stake-tx-build | 51 |
+| total | 162 |
 
 CI runs `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked
 --all-targets -- -D warnings` on both the host target and `wasm32-wasip2`, and a
 locked release build for `wasm32-wasip2`, on Rust 1.96.1.
+
+[`REPRODUCE.md`](REPRODUCE.md) walks an operator from a bare machine to a running
+agent, including the host build, and every command in it was executed on the
+machine that produced the demo.
 
 Fixtures for `lending-health` and `stake-tx-build` are captures from live
 endpoints, including a mainnet transaction and a MarginFi account. One MarginFi
