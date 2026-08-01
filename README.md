@@ -122,8 +122,8 @@ Host tests run without a wasm toolchain and without network access:
 |---|---|
 | lending-health | 73 |
 | stake-monitor | 38 |
-| stake-tx-build | 51 |
-| total | 162 |
+| stake-tx-build | 62 |
+| total | 173 |
 
 CI runs `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked
 --all-targets -- -D warnings` on both the host target and `wasm32-wasip2`, and a

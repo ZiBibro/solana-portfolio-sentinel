@@ -618,6 +618,144 @@ different layer.
 
 ---
 
+## 7.2 The daily brief
+
+Everything up to here answers when you ask it. This is the part that does not
+wait for you, and it is the reason the setup is worth keeping.
+
+Add this to the config. Note that it is a top-level `[cron.*]` block, not a SOP
+trigger: the SOP engine defines a cron trigger type, but no live scheduler feeds
+the SOP dispatcher in this version, so a SOP with a cron trigger loads cleanly
+and never fires. The top-level cron jobs are wired to the daemon and do fire.
+
+```toml
+[cron.morning-brief]
+name = "Morning brief on my Solana positions"
+job_type = "agent"
+enabled = true
+uses_memory = false
+session_target = "isolated"
+allowed_tools = ["lending_health", "stake_monitor"]
+prompt = "Morning check on my Solana positions. Call stake_monitor for my stake accounts and lending_health for the wallets I track. Report only what changed since yesterday and what needs a decision today: a validator that stopped voting, a position inside its warning buffer, a stake that finished cooling down. Name the options for each. If nothing needs action, say so in one line and stop."
+
+[cron.morning-brief.schedule]
+kind = "cron"
+expr = "0 8 * * *"
+tz = "Europe/Kiev"
+
+[cron.morning-brief.delivery]
+mode = "announce"
+channel = "telegram.demo"
+```
+
+Then list the job on the agent so it claims it:
+
+```toml
+[agents.sentinel]
+cron_jobs = ["morning-brief"]
+```
+
+**Declare it in the config, not through the CLI.** `zeroclaw cron add` works, and
+it writes the job into the scheduler database under a generated UUID. Nothing in
+your config file then mentions it, so the schedule reproduces for nobody,
+including you after a reinstall. A declarative block is read by whoever reads the
+config.
+
+**Give it read-only tools.** `allowed_tools` is where the safety of an unattended
+run lives. An approval card is worth nothing at 08:00 when nobody is looking at
+the phone, so the transaction builder is absent from the grant rather than merely
+discouraged. `uses_memory = false` with an isolated session keeps a poisoned
+string from one morning out of the next one.
+
+Verify the scheduler picked it up:
+
+```bash
+zeroclaw --config-dir <your home> cron list
+```
+
+You should see the job under its readable name with a concrete next run, for
+example `next=2026-08-02T05:00:00+00:00` for an 08:00 Kyiv schedule. A job that
+lists without a next run has an expression the parser rejected.
+
+## 7.3 The two skills
+
+Skills are plain Markdown with frontmatter. They carry the reading procedure so
+it lives outside the model's improvisation and outside the plugin's Rust.
+
+```
+<install>/shared/skills/solana-sentinel/morning-triage/SKILL.md
+<install>/shared/skills/solana-sentinel/liquidation-price/SKILL.md
+```
+
+```toml
+[skill_bundles.solana-sentinel]
+
+[agents.sentinel]
+skill_bundles = ["solana-sentinel"]
+```
+
+Omitting `directory` under the bundle is deliberate: it resolves to
+`<install>/shared/skills/<bundle>/`, which is where the files already are.
+
+`morning-triage` holds the reading rules: call both readers, treat `no debt` as
+the safest state rather than a missing reading, never abbreviate an address,
+report only what changed. `liquidation-price` converts a buffer percentage into
+the SOL price at which the position liquidates, using the **built-in**
+`http_request` tool against Jupiter's keyless price endpoint. That one is worth
+copying for the layering lesson: one GET plus arithmetic does not belong in a
+compiled component, and putting it in a skill keeps the component boundary for
+work that actually needs it.
+
+Confirm the agent loads them:
+
+```bash
+zeroclaw --config-dir <your home> skills list --agent sentinel
+```
+
+## 7.4 The procedure
+
+Deactivating a stake is the one operation here that changes state, so it gets a
+checkpoint rather than a bare tool call.
+
+```
+<install>/shared/sops/stake-deactivation-review/SOP.toml
+<install>/shared/sops/stake-deactivation-review/SOP.md
+```
+
+```toml
+[sop]
+sops_dir = "shared/sops"
+step_scope_enforce = true
+persist_runs = true
+```
+
+The five steps read the stake, read the debt side, then stop at a checkpoint with
+both readings on screen. Only after a human advances the run does step 4 build
+anything. Per-step tool scopes mean the reading steps cannot reach the builder,
+and `step_scope_enforce = true` turns those scopes from hints into enforced
+filters.
+
+Validate before you rely on it:
+
+```bash
+zeroclaw --config-dir <your home> sop validate stake-deactivation-review
+zeroclaw --config-dir <your home> sop graph stake-deactivation-review
+```
+
+The graph should print five steps in order with `manual` feeding step 1. The run
+starts when the agent calls `sop_execute`, which it does when you ask it to walk
+through a deactivation.
+
+**A trap that cost us twenty minutes:** a relative `sops_dir` resolves against
+the **process working directory**, not against `--config-dir`. Start the daemon
+from anywhere else and `sop list` cheerfully reports `No SOPs found` with a
+suggestion to create one, which reads exactly like a syntax error in your
+manifest. Either start the daemon from the agent home, or write an absolute path.
+The same does not apply to the skill bundle, which resolves against the install
+root.
+
+---
+
 ## 8. The traps
 
 Five things will bite you. Four of them look like a broken plugin and are not.
