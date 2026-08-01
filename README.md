@@ -16,6 +16,15 @@ Each plugin is a self-contained `wasm32-wasip2` component: a pure Rust core the
 host test suite exercises without a wasm toolchain, and a thin
 `#[cfg(target_family = "wasm")]` shim over the `zeroclaw:plugin@0.1.0` world.
 
+**The components are half of it.** [`shared/`](shared/) holds the composition
+that turns them into something someone runs daily: a declarative cron job that
+announces a brief every morning with a read-only tool grant, two skills carrying
+the reading rules and the price conversion, and one SOP that stops at a human
+checkpoint before any transaction bytes exist. Copy that directory into your
+install root and point the config at it;
+[`shared/README.md`](shared/README.md) explains each piece and why it sits at
+that layer. The full runbook is [`REPRODUCE.md`](REPRODUCE.md).
+
 ## The readers
 
 ### lending-health
