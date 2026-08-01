@@ -96,11 +96,56 @@ $ ./target/release/zeroclaw.exe --version
 zeroclaw 0.8.3
 ```
 
-**Pin it deliberately.** When this runbook was written, `origin/master` was already
-**30 commits ahead** of that pin, and the plugin WIT contract carries no `.frozen`
-marker, so the interface is allowed to move under you. Building the pinned commit
-gives you the host the demo was recorded against. Once it works, moving forward is
-your call.
+**The pin is load-bearing, and we can now say exactly why.** The plugin WIT
+contract in `wit/v0` carries no `.frozen` marker, so the interface is allowed to
+move under you, and it has. On 2026-08-01 we built the host from `origin/master`
+at `cc92c86`, 99 commits past the pin, and pointed it at the same three
+components this repository ships. They do not load at all:
+
+```
+failed to instantiate tool plugin: component imports instance
+`zeroclaw:plugin/logging@0.1.0`, but a matching implementation was not found in
+the linker: instance export `log-record` has the wrong type: type mismatch with
+parameters: type mismatch for field action: expected enum of 38 names, found 37
+names
+```
+
+A single enum in `wit/v0/logging.wit` gained one variant, `memory-audit`. Every
+component compiled against the older contract declares 37 where the newer host
+requires 38, and the component model refuses the link before the first call. Note
+what this looks like from the outside: `zeroclaw plugin list` still prints all
+three plugins, because those descriptions come from `manifest.toml` rather than
+from the component. The failure appears only when a tool is actually invoked.
+
+**If you built the pinned commit, nothing here affects you.** Skip to section 3.
+
+**If you already built a newer host,** you do not need a different version of
+this code. Copy that host's contract into this repository and rebuild:
+
+```bash
+cp -r ../zeroclaw/wit/v0 ./wit/
+for p in plugins/*/; do (cd "$p" && cargo build --locked --target wasm32-wasip2 --release); done
+```
+
+We verified this exact path on 2026-08-01 against `cc92c86`. All three crates
+rebuilt with no source change, each artifact grew by exactly 13 bytes, and all
+three then instantiated and executed on that host. The rebuilt sizes were
+385998, 352755 and 377524 bytes; your digests will differ if your toolchain
+differs, which is expected and is discussed under "What a digest does and does
+not prove" below.
+
+**The binding runs both ways, and we measured that too.** Components rebuilt
+against `cc92c86` fail on the pinned host with the same linker error, in mirror
+image: the host offers 37 enum names where the component now requires 38. So the
+recipe above is not a universal fix that makes one build work everywhere. It
+produces one matched pair of host and components, and moving either half means
+rebuilding the other.
+
+One consequence worth stating plainly, since it applies to every ZeroClaw plugin
+rather than only to ours: a component is bound to the WIT of the host that runs
+it, and `wit/VERSIONING.md` does not list "adding a variant to an existing enum"
+in either its breaking or its non-breaking column. Until `v0` is frozen, rebuild
+whenever you move the host, and keep the two halves together.
 
 ---
 
@@ -1093,6 +1138,13 @@ Read out of the components. Values in `config.toml` are always quoted strings.
 Everything in this table was taken from the machine that runs the demo, on the dates
 shown. Your numbers will differ; the orders of magnitude should not.
 
+**On the response-time rows in particular.** The two 2026-07-29 figures are each a
+single run, and reading them as the response time would overstate what we know. On
+2026-08-01 the same lending-health request against the same wallets returned in
+1352 ms and then 3235 ms on the very next pass. The endpoints are public and shared,
+so treat anything in this table as a range of roughly one to three seconds of tool
+time rather than as a figure with three significant digits.
+
 | Measurement | Value | When |
 |---|---|---|
 | Host source commit | `fc8b4d83e3a5eacd98486aaa51785b07a6c733dd`, `zeroclaw 0.8.3` | 2026-07-18 |
@@ -1100,11 +1152,17 @@ shown. Your numbers will differ; the orders of magnitude should not.
 | Host binary size | 38.7 MB | 2026-07-18 |
 | Host `target/` size after build | 3.3 GB | 2026-08-01 |
 | Distance from pinned commit to `origin/master` | 30 commits | fetched 2026-07-28 |
+| Distance from pinned commit to `origin/master` | 99 commits (`cc92c86`) | fetched 2026-08-01 |
+| Host release build from `cc92c86`, wall clock | 21 min 37 s | 2026-08-01 |
 | One plugin release build, cold `target/` | 44.81 s (`stake-monitor`) | 2026-08-01 |
 | Host tests across the three crates | 190 passing | 2026-08-01 |
 | `exec_tool` example build, warm host target | 4.41 s | 2026-08-01 |
 | lending-health response, 2 wallets / 6 positions | 1792 ms | 2026-07-29 |
 | lending-health response, 20 wallets / 50 positions | 2523 ms | 2026-07-29 |
+| lending-health response, configured wallets, two passes | 1352 ms and 3235 ms | 2026-08-01 |
+| stake-monitor response, two stake accounts, two passes | 1491 ms and 1259 ms | 2026-08-01 |
+| lending-health response, 3 wallets / 7 positions, two passes | 1921 ms and 1424 ms | 2026-08-01 |
+| Kamino reindex latency after an on-chain action | 1 second (tx 20:50:07, `positionsRefreshedOn` 20:50:08) | 2026-08-01 |
 | Full Telegram turn, approve to reply | 3 to 4 s | 2026-07-28 |
 | Rust toolchain used for the published digests | stable 1.97.1 | 2026-07-28 |
 | Rust toolchain pinned in CI | 1.96.1 | 2026-07-27 |
