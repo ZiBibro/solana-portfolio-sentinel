@@ -207,13 +207,13 @@ Measured on this checkout, 2026-08-01:
 
 | crate | tests passing |
 |---|---|
-| `lending-health` | 72 |
-| `stake-monitor` | 36 |
-| `stake-tx-build` | 48 |
-| total | **156** |
+| `lending-health` | 74 |
+| `stake-monitor` | 39 |
+| `stake-tx-build` | 77 |
+| total | **190** |
 
-(The repository README still quotes an older 59/35/36 split. The counts above are
-what the suite actually reports today.)
+These match the README and the pull-request body. If your run reports something
+else, the checkout moved: measure yours and trust that.
 
 ---
 
@@ -646,7 +646,16 @@ tz = "Europe/Kiev"
 [cron.morning-brief.delivery]
 mode = "announce"
 channel = "telegram.demo"
+to = "REPLACE_WITH_YOUR_TELEGRAM_CHAT_ID"
 ```
+
+**`to` is required and its absence fails in the worst possible way.** Leave it
+out and the job still runs end to end: it loads the plugins, calls the tools,
+gets the data, and has the model write the brief. Only then does delivery refuse,
+with `delivery.to is required for announce mode` written to the runtime trace and
+nothing else. `cron list` shows the run as `degraded`, which reads like a network
+problem. We lost a cycle to this. The value is the same chat id that appears in
+your `external_peers` after the `/bind` handshake in section 7.
 
 Then list the job on the agent so it claims it:
 
@@ -1092,7 +1101,7 @@ shown. Your numbers will differ; the orders of magnitude should not.
 | Host `target/` size after build | 3.3 GB | 2026-08-01 |
 | Distance from pinned commit to `origin/master` | 30 commits | fetched 2026-07-28 |
 | One plugin release build, cold `target/` | 44.81 s (`stake-monitor`) | 2026-08-01 |
-| Host tests across the three crates | 156 passing | 2026-08-01 |
+| Host tests across the three crates | 190 passing | 2026-08-01 |
 | `exec_tool` example build, warm host target | 4.41 s | 2026-08-01 |
 | lending-health response, 2 wallets / 6 positions | 1792 ms | 2026-07-29 |
 | lending-health response, 20 wallets / 50 positions | 2523 ms | 2026-07-29 |

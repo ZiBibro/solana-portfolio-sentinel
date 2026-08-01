@@ -64,10 +64,12 @@ readings degrade to unknown and every other line still renders.
 ### stake-tx-build
 
 Encodes legacy messages by hand (header bytes, compact-u16 lengths, bincode
-discriminants, account metas) with no `solana-sdk` dependency, since that crate
-does not build for `wasm32-wasip2` inside a WIT component. The instruction bytes
-are locked by a golden test that reproduces a live mainnet delegate transaction
-byte for byte.
+discriminants, account metas) with no `solana-sdk` dependency. The reason is
+size and auditability rather than capability: the modular Solana crates do
+compile to `wasm32-wasip2`, and a component pulling them in still builds, so the
+hand-rolled path is a choice to keep the component minimal and every byte
+traceable to a test. The instruction bytes are locked by a golden test that
+reproduces a live mainnet delegate transaction byte for byte.
 
 Before building anything it verifies the endpoint's genesis hash against the
 operator's pinned cluster and refuses on mismatch, so an honest endpoint pointed
@@ -98,8 +100,10 @@ Structural rather than prompt-based, in four parts:
 
 Custody tiers, in the terms the ZeroClaw ladder uses: `lending-health` and
 `stake-monitor` are **T0 Read**, and `stake-tx-build` is **T1 Build**. The most
-sensitive secret any of them holds is an RPC endpoint URL. No private key
-appears in config or code, and nothing here can sign or submit.
+sensitive value these plugins hold is an RPC endpoint URL, and none of them can
+sign or submit. That statement covers the plugins only: the host config around
+them holds a channel token and a model API key like any ZeroClaw install, and
+those deserve the care the host documentation gives them.
 
 Each plugin README carries a threat model and a live transcript of a
 prompt-injection attempt being refused.
@@ -129,10 +133,10 @@ Host tests run without a wasm toolchain and without network access:
 
 | plugin | host tests |
 |---|---|
-| lending-health | 73 |
-| stake-monitor | 38 |
-| stake-tx-build | 73 |
-| total | 184 |
+| lending-health | 74 |
+| stake-monitor | 39 |
+| stake-tx-build | 77 |
+| total | 190 |
 
 CI runs `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked
 --all-targets -- -D warnings` on both the host target and `wasm32-wasip2`, and a
@@ -154,12 +158,18 @@ debugging a plugin that works everywhere except one machine.
 
 ## Relationship to the official registry
 
-The same code is proposed to
-[`zeroclaw-labs/zeroclaw-plugins#63`](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/63),
-which is open and stays open. That registry is not open intake by design, so
-this repository is where the plugins live and get released regardless of how
-that review lands. This listing is not an endorsement by ZeroClaw Labs, who do
-not maintain or audit anything here.
+The same code was proposed to
+[`zeroclaw-labs/zeroclaw-plugins#63`](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/63)
+on 19 July. The bounty listing was updated on 22 July asking contributors not to
+open registry pull requests during the bounty and stating that registry merges
+happen separately after judging, so on 1 August that PR was moved to draft with a
+comment explaining the timing. It keeps its history and stays out of the
+maintainers' review queue meanwhile.
+
+That registry is not open intake by design, so this repository is where the
+plugins live and get released regardless of how the review eventually lands.
+This listing is not an endorsement by ZeroClaw Labs, who do not maintain or
+audit anything here.
 
 Built for [Build Solana-native plugins for ZeroClaw](https://superteam.fun/earn/listing/zeroclaw),
 sponsored by Superteam Brasil.
