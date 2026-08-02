@@ -953,10 +953,13 @@ misjudge messages that name internal identifiers.
 
 More important for anyone relying on this layer: when the classifier does not
 answer within `timeout_secs`, the host writes `reply-intent precheck timed out;
-failing open` and forwards the message unchecked. The layer is best-effort. If
-your threat model needs an inbound filter that holds under load or a slow
-provider, this one does not hold, and the approval card plus the plugin's own
-allowlist are what remain. Both of those are structural and do not time out.
+failing open` and forwards the message unchecked. This is deliberate, specified
+in `zeroclaw#6067` (closed 8 July), which added the timeout and kept the
+pre-existing fail-open path. So `timeout_secs = 5` is a latency budget after
+which the filter yields, and the layer is best-effort by design. If your threat
+model needs an inbound filter that holds under load or a slow provider, this one
+does not hold, and the approval card plus the plugin's own allowlist are what
+remain. Both of those are structural and do not time out.
 
 **Diagnosis.** Look in the runtime trace. The host has already written the reason
 in plain language; it simply never sends it.
