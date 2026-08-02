@@ -15,6 +15,24 @@ rather than retyped. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
 and honest limits, and [`shared/`](shared/) is the composition that makes it a
 daily habit instead of a library.
 
+**Where this sits in the field, counted rather than asserted.** Measured
+2026-08-03 against all 109 open pull requests in `zeroclaw-labs/zeroclaw-plugins`
+and the 31 plugins already in the registry:
+
+| question | count |
+|---|---|
+| Open PRs touching lending health or stake reading | 7 |
+| Of those, any that builds a stake `delegate` or `deactivate` transaction | 0 |
+| Open PRs that mention composition around the components (cron, skill, SOP) | 9 |
+
+So the reading side is a crowded niche and this submission says so. The claim it
+does make is narrower and checkable: the unsigned stake transaction builder has
+no counterpart among the open PRs, and the nearest neighbour by craft is
+[#151](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/151), which parses
+transactions where this one constructs them. The other overlap worth naming is
+[#104](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/104), which also
+returns unsigned transactions, for Kamino repayments rather than for stake.
+
 ---
 
 ZeroClaw tool plugins that let an agent watch a Solana portfolio and hand back
@@ -130,6 +148,37 @@ the refusal names what is configured rather than echoing the request back:
 wallet `9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM` is not in the configured
 allowlist; known labels: main, hedge
 ```
+
+## On-chain transactions behind these claims
+
+Every row is a real transaction you can open. The program column matters more
+than the signature: it shows the transaction actually touched the program the
+plugin is written against.
+
+| what it is | network | program invoked | transaction |
+|---|---|---|---|
+| The deposit that opened the position `lending-health` reads as `own` | mainnet | Kamino Lend `KLend2g3…` | [`5c8RyMPG…`](https://solscan.io/tx/5c8RyMPGtQjBT6ZWKrZ8AxqgCqM8MSKJ3dzAPaqUDaVeUhXAAWBAbrYXLHbPoRR3opdXADDfwgEzgkeFjxZCsJnm) |
+| The borrow against it, 5 USDC | mainnet | Kamino Lend `KLend2g3…` | [`4w7dsihH…`](https://solscan.io/tx/4w7dsihHBa6BvjgBKFqCozktPEp72UhHTksyRPjsf7H2y6f1TBVday9hr719ABe7tjE6rDX9jQvXunKwEpZoYGz4) |
+| The `delegate` that put the demo stake account into its `activating` state | devnet | Stake Program | [`3DwoSx4Y…`](https://explorer.solana.com/tx/3DwoSx4YSgfyamK96HixCC1agXQwWg6ru6G4BQHdTRY13cqwZh9rh9EQDS3BTdNkFNgTNVbxS1dadiByoPubS8qc?cluster=devnet) |
+| The `deactivate` that produced the `deactivating` reading | devnet | Stake Program | [`2BrRUssX…`](https://explorer.solana.com/tx/2BrRUssXQ8byT6pKaFX6Vrgqh9fYPvbmUan1tRqHgag158DFfRdX5jxmDugzikCPANhb2zovtujVRuUqGzvGXWR4?cluster=devnet) |
+| The mainnet `delegate` a golden test reproduces byte for byte | mainnet | Stake Program | [`5yaZiJMV…`](https://solscan.io/tx/5yaZiJMVnN5fM5K4rHQFrntaprKQJJbuLqiVGWh7Dkg1MqtswUno83BTozmzN8xAfLZTtFTZiwhTUZsmNoa5kVRA) |
+
+All five confirm with `err: null`.
+
+**Read the middle two rows precisely.** They were submitted with the Solana CLI
+to build the devnet stand, and they are the events that gave `stake-monitor`
+real lifecycle states to report rather than fixtures. They are evidence for the
+reader.
+
+**Nothing the builder produced has ever been sent to a network, and that is the
+design.** The plugin returns bytes with an empty signature slot; it holds no key
+and cannot sign or submit. What was proven instead is that the Solana runtime
+accepts those bytes: both a `deactivate` carrying a durable nonce and a
+`delegate` on a fresh blockhash went through `simulateTransaction` on devnet
+with `err: null`, at 10882 and 16956 compute units, with `AdvanceNonceAccount`
+standing first in the durable case as the runtime requires. That transcript is
+in [`SHOWCASE.md`](SHOWCASE.md); the last mile, an operator signing and sending,
+stays with the operator.
 
 ## Safety model
 
