@@ -681,7 +681,7 @@ enabled = true
 uses_memory = false
 session_target = "isolated"
 allowed_tools = ["lending_health", "stake_monitor"]
-prompt = "Morning check on my Solana positions. Call stake_monitor for my stake accounts and lending_health for the wallets I track. Report only what changed since yesterday and what needs a decision today: a validator that stopped voting, a position inside its warning buffer, a stake that finished cooling down. Name the options for each. If nothing needs action, say so in one line and stop."
+prompt = "Morning check on my Solana positions. Call stake_monitor for my stake accounts and lending_health for the wallets I track. Open with one line on my own borrow position, the one on the wallet labelled own: its LTV against the liquidation line and how much buffer is left. Give that line every morning, including the mornings when it is healthy and needs nothing, because it is my own money and I want to see it. After that line, report only what changed since yesterday and what needs a decision today: a validator that stopped voting, a position inside its warning buffer, a stake that finished cooling down. Name the options for each. If nothing else needs action, say so in one line and stop."
 
 [cron.morning-brief.schedule]
 kind = "cron"
@@ -730,6 +730,25 @@ zeroclaw --config-dir <your home> cron list
 You should see the job under its readable name with a concrete next run, for
 example `next=2026-08-02T05:00:00+00:00` for an 08:00 Kyiv schedule. A job that
 lists without a next run has an expression the parser rejected.
+
+**When you later want a different hour, edit the file.** `config set` refuses any
+cron key whose alias carries a hyphen, and `morning-brief` carries one:
+
+```
+Error: alias 'morning-brief' contains invalid character '-'; only lowercase
+letters, digits, and single underscores are allowed (no hyphen, no uppercase)
+```
+
+`config list` and `config get` read the same job without complaint, so the block
+is valid; the write path alone disagrees. Change `expr` in `config.toml` and
+restart the daemon, which resyncs `jobs.db` from the file on startup. Filed
+upstream as Finding 8 in our findings write-up.
+
+The resync itself is worth watching. We have seen a config edit clear a job's run
+history once, on 2026-08-01, after which `cron list` reported `last=never` for a
+job that had fired. Editing only `expr` on 2026-08-02 preserved the history
+across a daemon restart. Treat `last` as informative rather than authoritative
+after any config change, and read the trace when you need the run of record.
 
 ## 7.3 The two skills
 
@@ -920,6 +939,24 @@ produced "contradictory instruction" and no reply.
 The first of those is the system working exactly as intended, and it is worth
 knowing that your injection test may be killed one layer above your plugin. The
 other two read as a hung bot.
+
+**Two more verdicts, captured on 2026-08-02, and both matter more than the three
+above.**
+
+A legitimate operator request naming a procedure by its id produced `kind:
+Failed` with the reason `SOP 'stake-deactivation-review' not found in available
+tools/skills — cannot execute unknown procedure`. That reason is wrong: the SOP
+was loaded and `sop_execute` was registered. It is also not a string from the
+host source, so the classifier composed it. Rephrasing the same request in plain
+language, with no procedure id in it, got through. Expect the classifier to
+misjudge messages that name internal identifiers.
+
+More important for anyone relying on this layer: when the classifier does not
+answer within `timeout_secs`, the host writes `reply-intent precheck timed out;
+failing open` and forwards the message unchecked. The layer is best-effort. If
+your threat model needs an inbound filter that holds under load or a slow
+provider, this one does not hold, and the approval card plus the plugin's own
+allowlist are what remain. Both of those are structural and do not time out.
 
 **Diagnosis.** Look in the runtime trace. The host has already written the reason
 in plain language; it simply never sends it.
