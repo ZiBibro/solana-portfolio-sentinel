@@ -249,6 +249,6 @@ these documents still agree with each other and with the repository.
 - **Code:** https://github.com/ZiBibro/solana-portfolio-sentinel (MIT and Apache-2.0, green CI)
 - **Runbook:** [REPRODUCE.md](https://github.com/ZiBibro/solana-portfolio-sentinel/blob/main/REPRODUCE.md), written from real output. About ninety minutes of wall clock with the toolchain installed, carrying the full config file with secrets redacted and five traps with their fixes.
 - **Per-plugin threat model and injection transcript:** the README inside each plugin directory
-- **CI run, green on HEAD:** https://github.com/ZiBibro/solana-portfolio-sentinel/actions/runs/30766096031
+- **CI:** [every run on `main`](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml?query=branch%3Amain). Deliberately not a link to one run: this file lives in the repository, so pinning a run id here would go stale on the very commit that updates it.
 
 A note on the registry. Our pull request to `zeroclaw-plugins` has been open since 18 July, predating the 22 July guidance to keep code in your own repo during the bounty. On 1 August we moved it to draft with a comment explaining the timing, so it sits out of the review queue for the duration without losing its history. The standalone repository above is the code this showcase submits.
