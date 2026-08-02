@@ -250,13 +250,13 @@ checkout is sound:
 for manifest in plugins/*/Cargo.toml; do cargo test --locked --manifest-path "$manifest"; done
 ```
 
-Measured on this checkout, 2026-08-01:
+Measured on this checkout, 2026-08-03:
 
 | crate | tests passing |
 |---|---|
-| `lending-health` | 74 |
-| `stake-monitor` | 39 |
-| `stake-tx-build` | 77 |
+| `lending-health` | 83 |
+| `stake-monitor` | 47 |
+| `stake-tx-build` | 81 |
 | total | **190** |
 
 These match the README and the pull-request body. If your run reports something
@@ -1036,6 +1036,91 @@ your Rust installation.
 
 ---
 
+## 8.6 Keeping it running, which is the whole point
+
+Everything above gets you a brief. Getting the brief tomorrow, and the morning
+after, needs the daemon alive when you are not at the machine. This is the part
+that decides whether the agent is a demo or a habit, and it is where our own
+stand fell short: the demo machine sleeps overnight, so for two weeks every
+recorded unattended run came from a schedule we had shifted forward by minutes
+rather than from the 08:00 the config declares. The gap is worth naming because
+it is easy to inherit.
+
+**Two things kill a scheduled agent, and neither reports itself.** The machine
+sleeping is the first: a suspended process does not run cron, and on wake the
+scheduler treats the missed slot as past and moves to tomorrow. A terminal
+closing is the second, if you started the daemon by hand in a shell.
+
+**Windows.** Disable sleep on AC power, then register the daemon as a scheduled
+task that starts at logon:
+
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change hibernate-timeout-ac 0
+
+$exe  = "C:\path\to\zeroclaw.exe"
+$home = "C:\path\to\zeroclaw-home"
+$action  = New-ScheduledTaskAction -Execute $exe `
+             -Argument "--config-dir `"$home`" daemon" -WorkingDirectory $home
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+$set     = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
+             -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 -RestartCount 3 `
+             -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName "zeroclaw-daemon" -Action $action `
+  -Trigger $trigger -Settings $set
+```
+
+The working directory matters: a relative `sops_dir` resolves against it, so a
+task without `-WorkingDirectory` loads zero SOPs and says nothing about it. That
+is trap 2 arriving through a different door.
+
+**Linux, as a user service.** `~/.config/systemd/user/zeroclaw.service`:
+
+```ini
+[Unit]
+Description=ZeroClaw agent daemon
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/zeroclaw-home
+ExecStart=/usr/local/bin/zeroclaw --config-dir %h/zeroclaw-home daemon
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now zeroclaw
+loginctl enable-linger "$USER"   # so it survives logout
+```
+
+The `enable-linger` line is the one people miss: without it a user service stops
+when the last session ends, and the 08:00 job never fires.
+
+**macOS** has `zeroclaw service install`, which writes a launchd agent for you.
+On Windows and Linux that subcommand exists too, and the recipes above are the
+manual equivalent if you would rather see what is being registered.
+
+**Verifying it actually survives.** Restarting the machine is the only honest
+test. After the reboot, before anything else:
+
+```bash
+zeroclaw --config-dir <your home> doctor
+zeroclaw --config-dir <your home> cron list
+```
+
+`doctor` should report the daemon heartbeat fresh and the scheduler healthy.
+`cron list` should show a `next` in the future and, after the first morning, a
+`last` whose timestamp matches your scheduled hour rather than the moment you
+started the daemon. If `last` tracks your start time instead, the job is firing
+as a missed run on startup, and the schedule has never been exercised.
+
+---
+
 ## 9. Optional: a devnet stand, if you have no positions to watch
 
 You do not need mainnet money to run this. Everything except the Kamino lending path
@@ -1234,7 +1319,7 @@ of tool time rather than as a figure with three significant digits.
 | Distance from pinned commit to `origin/master` | 99 commits (`cc92c86`) | fetched 2026-08-01 |
 | Host release build from `cc92c86`, wall clock | 21 min 37 s | 2026-08-01 |
 | One plugin release build, cold `target/` | 44.81 s (`stake-monitor`) | 2026-08-01 |
-| Host tests across the three crates | 190 passing | 2026-08-01 |
+| Host tests across the three crates | 211 passing | 2026-08-01 |
 | `exec_tool` example build, warm host target | 4.41 s | 2026-08-01 |
 | lending-health response, 2 wallets / 6 positions | 1792 ms | 2026-07-29 |
 | lending-health response, 20 wallets / 50 positions | 2523 ms | 2026-07-29 |
