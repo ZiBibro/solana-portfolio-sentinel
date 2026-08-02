@@ -66,7 +66,7 @@ The plugins issue these JSON-RPC methods:
 |---|---|
 | `lending-health` | `getProgramAccounts` |
 | `stake-monitor` | `getAccountInfo`, `getEpochInfo`, `getInflationReward`, `getVoteAccounts` |
-| `stake-tx-build` | `getAccountInfo`, `getGenesisHash`, `getLatestBlockhash` |
+| `stake-tx-build` | `getAccountInfo`, `getGenesisHash`, `getLatestBlockhash`, `getVoteAccounts` |
 
 `getProgramAccounts` is the expensive one, and the public `api.mainnet-beta.solana.com`
 endpoint rate-limits or refuses it. `getInflationReward` and `getVoteAccounts` are
@@ -234,9 +234,11 @@ world tool-plugin {
 
 We diffed those files against the pinned host tree: `tool.wit`, `types.wit`,
 `logging.wit` and `plugin-info.wit` are byte-identical once line endings are
-normalized. The files that differ (`channel.wit`, plus `sockets.wit` and
-`ws-client.wit`, which exist only in the newer tree) belong to worlds these plugins
-do not implement. If you move the host pin forward, re-run that diff before assuming
+normalized, as are `inbound.wit` and `memory.wit`. Four files do not match, and none
+of them is in these plugins' way. `channel.wit` differs, while `sockets.wit` and
+`ws-client.wit` exist only in the newer tree; all three belong to worlds these
+plugins do not implement. The fourth is the tree's own `README.md`, which is
+documentation. If you move the host pin forward, re-run that diff before assuming
 the components still load.
 
 ### 3.2 Run the tests before you build anything
@@ -303,10 +305,14 @@ file named in `wasm_path` to sit **beside** it, so the artifact has to come up o
 of `target/`. The crate names use hyphens and the artifacts use underscores; that is
 cargo, not a mistake.
 
-**Do not expect byte-identical hashes.** We measured three different sha256 digests
-for the same source across three build environments. The digest depends on the
-toolchain version and on whether `target/` was warm. If you want a digest to compare
-against, take it from a `cargo clean` build on a named toolchain, and say which one.
+**Compare digests only against clean builds.** Two clean builds in different
+directories on this machine reproduced each artifact byte for byte, and a repeat of
+the first matched again. A build over a warm `target/` did not: it returned an
+artifact of identical length with a different digest. We have also seen a digest
+move across sessions on unchanged source, at identical length, without isolating the
+cause, so we do not claim these digests hold across machines or toolchain installs.
+If you want a digest to compare against, take it from a `cargo clean` build on a
+named toolchain, and say which one.
 
 ---
 
@@ -339,12 +345,16 @@ Verified on a clean config directory:
 
 ```
 Plugin installed from .../src-lending-health
+Seeded [[plugins.entries]] for 'lending-health'. Set plugin config values with `zeroclaw config set plugins.entries.lending-health.config.<key>`.
 Installed plugins:
   lending-health v0.1.0 — DeFi lending position health for operator wallets: LTV vs liquidation across Kamino and MarginFi, shaped for chat
 ```
 
-The installer copies the directory to `$ZC_HOME/plugins/<name>/` and does not touch
-`config.toml`. Wiring the plugins into the agent is section 6.
+The installer copies the directory to `$ZC_HOME/plugins/<name>/` and, as that second
+line says, writes `config.toml`: it seeds a bare `[[plugins.entries]]` carrying only
+`name`, with no config values under it. Re-installing is idempotent and leaves values
+you have already set alone. Wiring the plugins into the agent is section 6, whose
+template carries those entries with their config filled in.
 
 **Do not try `zeroclaw plugin install stake-monitor`** (the bare name). That form
 resolves against a plugin registry, and these plugins are deliberately not in one
@@ -651,9 +661,9 @@ different layer.
    firing with zero `plugin_fn` entries, which is the proof that the gate cuts in
    front of the WASM call rather than after it.
 4. Ask again and press **Approve**. A report comes back within a few seconds. Our
-   measured end-to-end turn was 3 to 4 seconds: 0.75 to 1.10 s inside the plugin
-   (including Cranelift compiling the component on load), about 1.8 s for the final
-   model call, the rest delivery.
+   measured end-to-end turn, from the button to the reply in chat, was 3 to 4
+   seconds. We did not record a per-stage split, so treat that as the whole turn
+   and nothing finer.
 5. Ask for an unsigned deactivate transaction. Check that the base64 blob arrives
    **whole**, not as `[REDACTED_HIGH_ENTROPY_TOKEN]`. If it is redacted, trap 2 is
    your answer.
@@ -803,10 +813,19 @@ persist_runs = true
 ```
 
 The five steps read the stake, read the debt side, then stop at a checkpoint with
-both readings on screen. Only after a human advances the run does step 4 build
-anything. Per-step tool scopes mean the reading steps cannot reach the builder,
-and `step_scope_enforce = true` turns those scopes from hints into enforced
-filters.
+both readings written into the run record. Only after a human advances the run does
+step 4 build anything. We watched that hold on 2026-08-02: the checkpoint went into
+`waiting_approval` at 18:02:32 and stayed there until the operator advanced it at
+about 18:04, after which `stake_tx_build` ran at 18:04:35. No transaction bytes
+existed before it. Per-step tool scopes mean the reading steps cannot reach the
+builder, and `step_scope_enforce = true` turns those scopes from hints into
+enforced filters.
+
+**Know where that checkpoint is not.** It has no channel delivery. Nothing arrives
+in Telegram, and no approval card appears there: the card you have seen belongs to
+the tool gate, which is a different mechanism. A SOP run is advanced from the CLI
+with `sop approve`, or over HTTP with `POST /admin/sop/approve`. An operator who set
+this up as a messenger agent and waits in the messenger waits forever.
 
 Validate before you rely on it:
 
@@ -815,9 +834,18 @@ zeroclaw --config-dir <your home> sop validate stake-deactivation-review
 zeroclaw --config-dir <your home> sop graph stake-deactivation-review
 ```
 
-The graph should print five steps in order with `manual` feeding step 1. The run
-starts when the agent calls `sop_execute`, which it does when you ask it to walk
-through a deactivation.
+The graph should print five steps in order with `manual` feeding step 1.
+
+**Starting a run is its own problem, and chat is not the way in.** The path that
+worked for us on 2026-08-02 is the host's HTTP gateway: `POST /pair` with the
+pairing code the daemon printed, then `POST /api/sops/stake-deactivation-review/run`
+with the bearer token that returns. Asking the agent in the channel did not start a
+run in three consecutive attempts, and `sop_execute` appears zero times in the trace
+for all three. Naming the procedure gets the message killed by the precheck before
+the agent sees it (trap 4); asking in plain language leaves the model narrating the
+steps without calling the tool. The `payload` field wants a string that itself
+contains JSON, so the working body is doubly encoded:
+`{"payload":"{\"account\":\"spare\"}"}`.
 
 **A trap that cost us twenty minutes:** a relative `sops_dir` resolves against
 the **process working directory**, not against `--config-dir`. Start the daemon
@@ -861,9 +889,11 @@ does the same.
 **Cause.** ZeroClaw scans outbound channel messages for leaked credentials. The
 entropy heuristic fires on any run of 24 or more characters that mixes letters and
 digits and whose Shannon entropy clears `3.5 + sensitivity * 1.25`, which at the
-default sensitivity of 0.7 means 4.375. Our golden transaction is 169 characters
-with entropy 5.57. It is redacted every time, on every operator's machine, and the
-main frame of any demo becomes a placeholder.
+default sensitivity of 0.7 means 4.375. A deactivate transaction from this builder
+is 320 base64 characters with entropy 4.79, and the durable variant our stand
+produced on 2026-08-02 was 464 characters with entropy 4.74. Either one is redacted
+every time, on every operator's machine, and the main frame of any demo becomes a
+placeholder.
 
 **Fix.** The line already in the template:
 
@@ -899,10 +929,12 @@ unfunded key gives "nonce account not found on chain", and a vote account gives
 "nonce account is owned by `Vote111...`; expected the System program".
 
 **The timeout lies about who decided.** `approval_timeout_secs` defaults to 120 for
-Telegram. When it expires the host fails closed, which is right, and then tells you
-"Access denied — you declined the request", which is wrong: you declined nothing.
-Worse, the audit record is identical in both cases. We reproduced it on two
-different tools:
+Telegram. When it expires the host fails closed, which is right, and then hands the
+model three words and nothing else: `Denied by user.` Whatever you read in chat is
+composed by the model out of those three words, and it is not stable between
+sessions. One of ours produced "Access denied — you declined the request", which is
+wrong, because you declined nothing. Worse, the audit record is identical whether
+you pressed the button or never saw it. We reproduced that on two different tools:
 
 ```
 15:23  approval_gate.rs:100  result = Denied by user.   (operator pressed Deny)
@@ -1028,9 +1060,16 @@ rpc_url = "https://api.devnet.solana.com"
 
 The cluster gate is real. `stake-tx-build` reads the endpoint's genesis hash and
 compares it to the pinned cluster before it builds anything, and refuses on
-mismatch, so pointing a devnet endpoint at a `mainnet-beta` pin produces
-`cluster check failed` rather than a transaction you would have believed was for
-mainnet.
+mismatch, so pointing a devnet endpoint at a `mainnet-beta` pin gives you this
+rather than a transaction you would have believed was for mainnet:
+
+```
+cluster mismatch: rpc_url reports genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`, not mainnet-beta `5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d`
+```
+
+Do not confuse that with its neighbour. A genesis read that fails outright or comes
+back unparseable carries a different prefix, `cluster check failed`, and means the
+endpoint never answered the question rather than answering it with the wrong chain.
 
 Give it a full epoch. A freshly delegated account reports `[activating]`, and only
 becomes `[active]` at the next epoch boundary. On devnet that is roughly a day and a
@@ -1182,8 +1221,8 @@ shown. Your numbers will differ; the orders of magnitude should not.
 single run, and reading them as the response time would overstate what we know. On
 2026-08-01 the same lending-health request against the same wallets returned in
 1352 ms and then 3235 ms on the very next pass. The endpoints are public and shared,
-so treat anything in this table as a range of roughly one to three seconds of tool
-time rather than as a figure with three significant digits.
+so treat anything in this table as a range of roughly one to four and a half seconds
+of tool time rather than as a figure with three significant digits.
 
 | Measurement | Value | When |
 |---|---|---|
@@ -1201,15 +1240,20 @@ time rather than as a figure with three significant digits.
 | lending-health response, 20 wallets / 50 positions | 2523 ms | 2026-07-29 |
 | lending-health response, configured wallets, two passes | 1352 ms and 3235 ms | 2026-08-01 |
 | stake-monitor response, two stake accounts, two passes | 1491 ms and 1259 ms | 2026-08-01 |
-| lending-health response, 3 wallets / 7 positions, two passes | 1921 ms and 1424 ms | 2026-08-01 |
+| lending-health response, 3 wallets / 7 positions, four readings | 2763, 2900, 3019 and 4373 ms | 2026-08-02 |
 | Kamino reindex latency after an on-chain action | 1 second (tx 20:50:07, `positionsRefreshedOn` 20:50:08) | 2026-08-01 |
 | Full Telegram turn, approve to reply | 3 to 4 s | 2026-07-28 |
 | Rust toolchain used for the published digests | stable 1.97.1 | 2026-07-28 |
 | Rust toolchain pinned in CI | 1.96.1 | 2026-07-27 |
 
-The 10x wallet increase costing only 41% more time is the concurrency in the source
-fetches showing through. Twenty sequential HTTPS calls would have taken tens of
-seconds.
+The two 2026-07-29 rows look as though ten times the wallets cost only 41% more
+time, and that is not concurrency showing through. There is none: `lib.rs` loops
+over wallets and, inside that, over protocols, and every fetch blocks on `waki`
+until the reply is whole. The runs are simply not comparable. The first made four
+calls, two of them the expensive MarginFi `getProgramAccounts`, which works out to
+about 448 ms a call. The second made twenty cheap Kamino REST calls at about 126 ms
+each. Each total is the call count times the cost of a call, which is what
+sequential work looks like.
 
 ---
 
