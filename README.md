@@ -2,6 +2,21 @@
 
 [![CI](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml)
 
+**Reviewing this? Two minutes gets you the whole claim.** Clone, then:
+
+```bash
+for m in plugins/*/Cargo.toml; do cargo test --locked --manifest-path "$m"; done
+```
+
+211 tests, no network, no wasm toolchain needed. What a live run prints is in
+[What a run looks like](#what-a-run-looks-like) below, taken from the trace
+rather than retyped. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
+[`SHOWCASE.md`](SHOWCASE.md) is the write-up with the custody tier, threat model
+and honest limits, and [`shared/`](shared/) is the composition that makes it a
+daily habit instead of a library.
+
+---
+
 ZeroClaw tool plugins that let an agent watch a Solana portfolio and hand back
 an unsigned transaction when something needs doing. Two of them read: how close
 a DeFi borrow position sits to liquidation, and what the operator's own stake
@@ -79,6 +94,43 @@ accounts. With an optional durable-nonce pair configured, the transaction opens
 with `AdvanceNonceAccount` and survives a slow approval queue; without one, the
 summary states the roughly 60 to 90 second blockhash window.
 
+## What a run looks like
+
+Verbatim from the tools, not retyped. This is the payload the model is handed;
+what reaches the chat is its rendering of it. Captured from the scheduled brief
+that ran at 18:20 Europe/Kiev on 2 August 2026.
+
+```
+Lending health: 7 position(s), worst risk WARN.
+[WARN] main kamino Vanilla@7u3H #HcrU..iS4J: deposit $79162, borrow $57580, LTV 72.7% of 79.9% liq (positions stale 92 h)
+[UNKNOWN] hedge marginfi acct #EN1W..K7ND: deposit $860, borrow $668, LTV n/a (maint basis unavailable)
+[OK] own kamino Vanilla@7u3H #62W5..imgq: deposit $22, borrow $5, LTV 22.8% of 75.0% liq (positions stale 18 h)
+[OK] hedge kamino Vanilla@6WEG #Cz3p..NQqK: deposit $843, borrow $0, no debt (positions stale 119 h)
+```
+
+Four things in those lines are deliberate. A position whose basis is missing
+reads `UNKNOWN` and gets no invented verdict. A position with no debt says so
+rather than reporting 0% risk. Every line carries how long since Kamino
+reindexed that wallet, so a three-day-old balance never reads as a current one.
+And each row names the wallet label it came from: `own` is the operator's own
+debt, the rest are watched addresses.
+
+The stake side, same run:
+
+```
+Stake: 2 account(s), 1.099 SOL delegated, epoch 1112 at 74% (~12 h left).
+[inactive] main: 1.008 SOL, validator deep.. ok, vote lag 0 slot(s), fee 100.0%
+[active] spare: 1.099 SOL, validator APsE.. ok, vote lag 0 slot(s), fee 0.0%, last reward 0.002 SOL
+```
+
+An address outside the operator's allowlist is refused before any RPC call, and
+the refusal names what is configured rather than echoing the request back:
+
+```
+wallet `9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM` is not in the configured
+allowlist; known labels: main, hedge
+```
+
 ## Safety model
 
 Structural rather than prompt-based, in four parts:
@@ -123,6 +175,20 @@ zeroclaw plugin install .
 
 The `.wasm` must sit beside `manifest.toml` when the installer runs, which is
 why it is copied up from `target/`. Built artifacts are not committed here.
+
+Running `plugin install` a second time is refused rather than ignored:
+
+```
+Error: plugin 'lending-health' is already loaded
+```
+
+That matters when you rebuild. The refusal leaves the previously installed
+`.wasm` in place, so a rebuilt component does not reach the host until you
+remove the plugin first:
+
+```bash
+zeroclaw plugin remove lending-health && zeroclaw plugin install .
+```
 
 Configuration keys, worked examples, and the permissions a plugin requests are
 documented in its own README under `plugins/`.
