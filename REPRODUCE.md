@@ -250,14 +250,14 @@ checkout is sound:
 for manifest in plugins/*/Cargo.toml; do cargo test --locked --manifest-path "$manifest"; done
 ```
 
-Measured on this checkout, 2026-08-03:
+Measured on this checkout, 2026-08-02:
 
 | crate | tests passing |
 |---|---|
 | `lending-health` | 83 |
 | `stake-monitor` | 47 |
 | `stake-tx-build` | 81 |
-| total | **190** |
+| total | **211** |
 
 These match the README and the pull-request body. If your run reports something
 else, the checkout moved: measure yours and trust that.
