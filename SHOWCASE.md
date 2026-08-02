@@ -4,6 +4,32 @@ The long version. [`README.md`](README.md) is the two-minute one, and
 [`REPRODUCE.md`](REPRODUCE.md) is the runbook that stands the whole thing up
 from a bare machine.
 
+## What the brief asks for, and where each answer is
+
+The listing names what a write-up must contain. Each row quotes it and points at
+the section that answers it, so nothing has to be hunted for.
+
+| what the listing asks | where it is answered |
+|---|---|
+| "what it does" | [The job](#the-job), [What a run looks like](#what-a-run-looks-like) |
+| "who it's for" | [The job](#the-job), final paragraph |
+| "which ZeroClaw features it uses" | [Which ZeroClaw features it uses](#which-zeroclaw-features-it-uses) |
+| "what (if anything) you had to build" | [What we had to build](#what-we-had-to-build) |
+| "its custody tier" | [Custody tier](#custody-tier) |
+| "and threat model" | [Threat model](#threat-model) |
+| "include a prompt-injection test in your write-up ... Transcript or it didn't happen" | [Prompt injection, with the honest part first](#prompt-injection-with-the-honest-part-first) |
+| "links to the config and code" | [Reproduce it](#reproduce-it) |
+| "Reproducibility is part of the submission ... I set this up in an evening" | [`REPRODUCE.md`](REPRODUCE.md), about ninety minutes of wall clock |
+
+The listing also names what it refuses. Those are worth answering directly:
+
+| what the listing refuses | why this is not that |
+|---|---|
+| "Concepts, mockups, or slideware. The agent must run." | It runs on a schedule with nobody watching, and the transactions behind every claim are linked from the README |
+| "A plugin with no use case around it. Components are not submissions here." | [`shared/`](shared/) carries the cron job, two skills and the SOP that turn three components into a morning habit |
+| "Thin single-RPC-call wrappers padded into WASM" | [On thin wrappers](#on-thin-wrappers) answers this one head on, including the one piece deliberately left as a skill because it *is* one GET plus arithmetic |
+| "Anything holding a raw private key with no caps, no allowlist, and no approval gate" | No key is held anywhere. Every address comes from an operator-owned allowlist, and the builder emits an unsigned transaction behind an approval card |
+
 ## The job
 
 A self-custody holder who has borrowed against collateral on Solana has a chore every morning. Open the Kamino app and read the loan-to-value against the liquidation line. Then find out whether the validator behind the stake is still voting and whether last epoch paid anything. It takes ten minutes, and it gets skipped on exactly the days it matters.
@@ -199,7 +225,7 @@ The spec rejects a single RPC call padded into WASM, and that test is quantitati
 
 **TLS root sets.** Plugins reach the network through `wasmtime-wasi-http` 45.0.3, whose request path trusts the bundled webpki roots and never reads the machine's certificate store. Any antivirus doing HTTPS scanning, and any corporate TLS proxy, installs its CA into that store. Every outbound call then fails with `ErrorCode::TlsProtocolError` while the browser on the same machine works fine. A plugin cannot fix this, since the root set is the host's choice. All three components instead route network errors through a helper that names the likely cause.
 
-**A component is bound to the WIT of the host that runs it, and we learned that the hard way.** Our three components were compiled on 18 July against the contract of the pinned host commit. On 1 August we built the host from the then-current `master`, 99 commits later, and pointed it at those same components. None of them load: `wit/v0/logging.wit` had gained one enum variant, so the component declares 37 names where the host requires 38, and the component model refuses the link before any call runs. Nothing in our own test suite could have caught it, because host tests exercise the pure core and never instantiate a component against someone else's runtime. The fix needs no source change at all: copy the host's `wit/v0` into the plugin tree and rebuild, which we verified end to end, each artifact growing by exactly 13 bytes and all three then executing. REPRODUCE.md pins the host commit for this reason and carries the rebuild recipe for anyone who moves past it. Worth flagging for the project itself: `wit/VERSIONING.md` classifies removing a variant as breaking and adding a whole new enum as non-breaking, while adding a variant to an existing enum, the case that broke us, appears in neither column.
+**A component is bound to the WIT of the host that runs it, and we learned that the hard way.** Our three components were compiled on 18 July against the contract of the pinned host commit. On 1 August we built the host from the then-current `master`, 99 commits later, and pointed it at those same components. None of them load: `wit/v0/logging.wit` had gained one enum variant, so the component declares 37 names where the host requires 38, and the component model refuses the link before any call runs. Nothing in our own test suite could have caught it, because host tests exercise the pure core and never instantiate a component against someone else's runtime. As of 2026-08-03 this stopped being a `master`-only concern: release `v0.8.4` carries the same enum, so an operator who installs the current release and skips the pin meets the same refusal. The fix needs no source change at all: copy the host's `wit/v0` into the plugin tree and rebuild, which we verified end to end, each artifact growing by exactly 13 bytes and all three then executing. REPRODUCE.md pins the host commit for this reason and carries the rebuild recipe for anyone who moves past it. Worth flagging for the project itself: `wit/VERSIONING.md` classifies removing a variant as breaking and adding a whole new enum as non-breaking, while adding a variant to an existing enum, the case that broke us, appears in neither column.
 
 **Nine of these went upstream as issues, all nine open, and the honest scorecard is mixed.** [#9465](https://github.com/zeroclaw-labs/zeroclaw/issues/9465) on the silent precheck was triaged the day it was filed. [#9642](https://github.com/zeroclaw-labs/zeroclaw/issues/9642) on an approval timeout being written into the audit record as an explicit operator denial, and [#9643](https://github.com/zeroclaw-labs/zeroclaw/issues/9643) on the versioning document, were both triaged at high priority within the hour, each with reproduction quality rated complete. Five more went up on 2 August: [#9652](https://github.com/zeroclaw-labs/zeroclaw/issues/9652) on `config set` refusing a cron key that `config list` prints, [#9653](https://github.com/zeroclaw-labs/zeroclaw/issues/9653) on plugin TLS trusting only the bundled roots, [#9654](https://github.com/zeroclaw-labs/zeroclaw/issues/9654) on a denial reaching the model as three words, [#9655](https://github.com/zeroclaw-labs/zeroclaw/issues/9655) on approval cards carrying no position, and [#9656](https://github.com/zeroclaw-labs/zeroclaw/issues/9656) on the typing indicator running through an approval wait. A ninth, [#9672](https://github.com/zeroclaw-labs/zeroclaw/issues/9672), went up late on 2 August after an adversarial pass over the CLI: none of the three `cron add` examples in the host's own help text run as printed, and the hint `cron list` shows on an empty schedule is a fourth broken form. It has not been triaged yet, so it is counted as filed rather than accepted.
 

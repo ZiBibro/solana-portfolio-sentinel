@@ -117,6 +117,13 @@ what this looks like from the outside: `zeroclaw plugin list` still prints all
 three plugins, because those descriptions come from `manifest.toml` rather than
 from the component. The failure appears only when a tool is actually invoked.
 
+**This is no longer only a `master` problem.** ZeroClaw `v0.8.4` was released at
+midnight on 2026-08-03, and the tag carries the same change: `git diff
+fc8b4d83 v0.8.4 -- wit/v0` returns exactly two files, `logging.wit` with the
+added `memory-audit` variant and `channel.wit` with two doc comments rewritten.
+So an operator who installs the current release today and skips the pin lands on
+the failure above. The pin, or the rebuild recipe below, is the whole fix.
+
 **If you built the pinned commit, nothing here affects you.** Skip to section 3.
 
 **If you already built a newer host,** you do not need a different version of
