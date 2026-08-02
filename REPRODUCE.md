@@ -1074,10 +1074,13 @@ remain. Both of those are structural and do not time out.
 **Diagnosis.** Look in the runtime trace. The host has already written the reason
 in plain language; it simply never sends it.
 
-**Escape hatch, if silence is unacceptable for your use case:**
+**Escape hatch, if silence is unacceptable for your use case.** The template
+already carries `[agents.sentinel.precheck]` with `enabled = true`, so flip that
+key in place. A second header with the same name is a duplicate key, and the host
+answers by resetting the entire config to defaults for the run:
 
 ```toml
-[agents.sentinel.precheck]
+# in the [agents.sentinel.precheck] block you already have
 enabled = false
 ```
 
