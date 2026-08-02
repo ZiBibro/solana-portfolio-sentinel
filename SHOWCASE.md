@@ -270,6 +270,56 @@ the command and read the output. `tools/check-invariants.py` in the working
 repository then keeps the fixed classes fixed, checking that the numbers in
 these documents still agree with each other and with the repository.
 
+## What we got wrong along the way
+
+Separate section on purpose. Scattering these through the text as hedges would
+read as vagueness; collected here they say something specific about how the work
+was checked.
+
+**A test stayed green over the behaviour it was written to protect.** Two weeks
+of that, described above. It is the single most useful thing the adversarial
+pass found, and it changed how every regression test in this repository is
+written: assert the collection is non-empty before asserting anything about its
+elements.
+
+**Two of our own runbook fixes were wrong, and we caught them ourselves.** An
+adversarial CLI pass claimed that `--agent` does not produce an agent job and
+that a narrowed `allowed_commands` blocks `cron add` outright. Both went into
+the runbook before verification. Reading the full `cron add --help` and someone
+else's upstream issue turned up the `--prompt` flag half an hour later: the flag
+was simply missing from our invocation, the host was behaving correctly, and the
+edit had to be reverted. The lesson kept: check the whole help text and the
+tracker before writing a fix, not after.
+
+**A table in this write-up was wrong for about ten minutes.** The first draft of
+the on-chain transaction table in the README labelled two devnet rows as
+transactions in the shape the builder emits. They are not. The builder's output
+has only ever been through `simulateTransaction`; those two were submitted with
+the Solana CLI while building the stand. Caught by re-reading our own protocol
+before publishing.
+
+**The published runbook shipped a test table that did not add up.** Rows of 83,
+47 and 81 sat under a previous total of 190, left over from before the last
+round of regression tests. They sum to 211, which is what every other file
+already said. The invariant checker that exists to catch exactly this had a context
+window too narrow to see the table header, so it stayed silent. Three more of
+its checks turned out to be measuring nothing at all, matching heading formats
+that no file uses. All four are fixed, and each fix was proven by putting the
+defect back and watching it fail.
+
+**Digests moved across sessions on unchanged source.** Two clean builds in
+different directories reproduce each other; a build over a warm `target/` can
+return an artifact of identical length with a different digest, and we have seen
+a digest shift between sessions without isolating the cause. Rather than
+explain it away, the claim in the PR body was narrowed to what is actually
+reproducible.
+
+**One integration path does not work and is not hidden.** Starting the SOP from
+the chat channel fails from both ends: the reply-intent precheck cuts the
+procedure name, and without the name the model does not call `sop_execute` at
+all. The SOP checkpoint has no channel delivery either, so approvals live in the
+CLI and the admin API. The runbook says so where it matters.
+
 ## Reproduce it
 
 - **Code:** https://github.com/ZiBibro/solana-portfolio-sentinel (MIT and Apache-2.0, green CI)
