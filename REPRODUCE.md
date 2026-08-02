@@ -352,9 +352,27 @@ Installed plugins:
 
 The installer copies the directory to `$ZC_HOME/plugins/<name>/` and, as that second
 line says, writes `config.toml`: it seeds a bare `[[plugins.entries]]` carrying only
-`name`, with no config values under it. Re-installing is idempotent and leaves values
-you have already set alone. Wiring the plugins into the agent is section 6, whose
-template carries those entries with their config filled in.
+`name`, with no config values under it. Wiring the plugins into the agent is
+section 6, whose template carries those entries with their config filled in.
+
+**Running these three lines a second time is an error, not a no-op.** The host
+refuses by name before it looks at the source:
+
+```
+$ zeroclaw --config-dir "$ZC_HOME" plugin install .../plugins/lending-health
+Error: plugin 'lending-health' is already loaded
+```
+
+Exit code is 1, and `config.toml` is left byte-identical, so nothing you set is
+lost. Two consequences matter. A shell block that checks exit codes stops here.
+And if you rebuilt a component in section 4 and re-ran this to pick it up, you
+did not: the old `.wasm` stays in place and the refusal is the only sign. There
+is no overwrite flag; remove the plugin first, then install:
+
+```bash
+zeroclaw --config-dir "$ZC_HOME" plugin remove lending-health
+zeroclaw --config-dir "$ZC_HOME" plugin install .../plugins/lending-health
+```
 
 **Do not try `zeroclaw plugin install stake-monitor`** (the bare name). That form
 resolves against a plugin registry, and these plugins are deliberately not in one
@@ -712,18 +730,63 @@ nothing else. `cron list` shows the run as `degraded`, which reads like a networ
 problem. We lost a cycle to this. The value is the same chat id that appears in
 your `external_peers` after the `/bind` handshake in section 7.
 
-Then list the job on the agent so it claims it:
+Then list the job on the agent so it claims it. **This is a key inside the
+`[agents.sentinel]` table that section 6 already created, not a second table.**
+Add the one line under the existing header:
 
 ```toml
-[agents.sentinel]
+# in the [agents.sentinel] block you already have, alongside its other keys
 cron_jobs = ["morning-brief"]
 ```
 
-**Declare it in the config, not through the CLI.** `zeroclaw cron add` works, and
-it writes the job into the scheduler database under a generated UUID. Nothing in
-your config file then mentions it, so the schedule reproduces for nobody,
-including you after a reinstall. A declarative block is read by whoever reads the
-config.
+Pasting the header again produces a duplicate TOML key, and the host does not
+stop. It resets the whole file to defaults for that run and says so in a single
+line that is easy to read past:
+
+```
+warning: config section `<entire-config>` in ...\config.toml is malformed and was
+reset to defaults for this run. Values in that section are NOT in effect.
+Error: agents.sentinel is not configured
+```
+
+Every symptom that follows (agent missing, plugins off, no morning brief) points
+away from the cause. `zeroclaw config migrate` prints the real line:
+
+```
+TOML parse error at line 175, column 9
+    175 | [agents.sentinel]
+    duplicate key
+```
+
+**Declare it in the config rather than through the CLI.** A job added with
+`zeroclaw cron add` lives in the scheduler database under a generated UUID.
+Nothing in your config file then mentions it, so the schedule reproduces for
+nobody, including you after a reinstall. A declarative block is read by whoever
+reads the config.
+
+If you do reach for the CLI, `--prompt` is not optional for an agent job, and
+none of the three examples in `cron add --help` will run as printed. Measured
+2026-08-02 on `0.8.3`:
+
+```
+$ zeroclaw cron add '*/5 * * * *' 'echo ok'
+error: the following required arguments were not provided:
+  --agent <AGENT_ALIAS>
+
+$ zeroclaw cron add --agent sentinel --tz Europe/Kiev '*/5 * * * *' 'Reply with one word'
+Error: blocked by security policy: Command not allowed by security policy: Reply with one word
+
+$ zeroclaw cron add --agent sentinel --prompt --tz Europe/Kiev '*/5 * * * *' 'Reply with one word'
+✅ Added agent cron job 63b07f1e-af3b-4ae7-8433-87eeba845946
+```
+
+The second form is correct behaviour rather than a bug: without `--prompt` the
+argument is a shell command, and the `allowed_commands` list above does not
+contain it. The help text is what misleads, since its examples pass `--agent`
+with no value and no `--prompt`. Delivery is a separate trap: a CLI-created job
+gets `delivery.mode = "none"` and discards its output while reporting `ok`
+(upstream [#9340](https://github.com/zeroclaw-labs/zeroclaw/issues/9340)), which
+the declarative block below avoids by naming a channel.
 
 **Give it read-only tools.** `allowed_tools` is where the safety of an unattended
 run lives. An approval card is worth nothing at 08:00 when nobody is looking at
@@ -731,14 +794,27 @@ the phone, so the transaction builder is absent from the grant rather than merel
 discouraged. `uses_memory = false` with an isolated session keeps a poisoned
 string from one morning out of the next one.
 
-Verify the scheduler picked it up:
+**Restart the daemon before you check.** `cron list` reads only
+`data/cron/jobs.db`, and the daemon is what copies declarative blocks into it at
+startup. Against a config you have just edited, the command reports
+
+```
+No scheduled tasks yet.
+
+Usage:
+  zeroclaw cron add '0 9 * * *' 'agent -m "Good morning!"'
+```
+
+and exits 0. That output describes the database, not your file: the block can be
+perfectly valid and still list nothing. Do not follow the usage hint it prints,
+for the reasons given above. Restart the daemon, then verify:
 
 ```bash
 zeroclaw --config-dir <your home> cron list
 ```
 
 You should see the job under its readable name with a concrete next run, for
-example `next=2026-08-02T05:00:00+00:00` for an 08:00 Kyiv schedule. A job that
+example `next=2026-08-03T05:00:00+00:00` for an 08:00 Kyiv schedule. A job that
 lists without a next run has an expression the parser rejected.
 
 **When you later want a different hour, edit the file.** `config set` refuses any
@@ -773,7 +849,9 @@ it lives outside the model's improvisation and outside the plugin's Rust.
 ```toml
 [skill_bundles.solana-sentinel]
 
-[agents.sentinel]
+# and this key goes INTO the existing [agents.sentinel] table, same as cron_jobs
+# above; a second [agents.sentinel] header is a duplicate key and silently
+# resets the whole config to defaults
 skill_bundles = ["solana-sentinel"]
 ```
 
@@ -1058,10 +1136,10 @@ task that starts at logon:
 powercfg /change standby-timeout-ac 0
 powercfg /change hibernate-timeout-ac 0
 
-$exe  = "C:\path\to\zeroclaw.exe"
-$home = "C:\path\to\zeroclaw-home"
+$exe    = "C:\path\to\zeroclaw.exe"
+$zcHome = "C:\path\to\zeroclaw-home"   # NOT $home: see the note below
 $action  = New-ScheduledTaskAction -Execute $exe `
-             -Argument "--config-dir `"$home`" daemon" -WorkingDirectory $home
+             -Argument "--config-dir `"$zcHome`" daemon" -WorkingDirectory $zcHome
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 $set     = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
              -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 -RestartCount 3 `
@@ -1069,6 +1147,20 @@ $set     = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
 Register-ScheduledTask -TaskName "zeroclaw-daemon" -Action $action `
   -Trigger $trigger -Settings $set
 ```
+
+**Why not `$home`.** PowerShell reserves `$HOME` as a read-only automatic
+variable, and the assignment fails without stopping the script:
+
+```
+Cannot overwrite variable HOME because it is read-only or constant.
+    + FullyQualifiedErrorId : VariableNotWritable
+```
+
+Execution continues with `$home` still pointing at your user profile, so the task
+registers as `--config-dir "C:\Users\<you>" daemon`. The daemon then starts
+against a directory with no plugins and no cron job, and the only symptom is a
+brief that never arrives. This is the same self-inflicted wound the runbook warns
+about in section 5; the variable name is what causes it here.
 
 The working directory matters: a relative `sops_dir` resolves against it, so a
 task without `-WorkingDirectory` loads zero SOPs and says nothing about it. That
