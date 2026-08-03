@@ -17,8 +17,8 @@ the section that answers it, so nothing has to be hunted for.
 | "what (if anything) you had to build" | [What we had to build](#what-we-had-to-build) |
 | "its custody tier" | [Custody tier](#custody-tier) |
 | "and threat model" | [Threat model](#threat-model) |
-| "include a prompt-injection test in your write-up ... Transcript or it didn't happen" | [Prompt injection, with the honest part first](#prompt-injection-with-the-honest-part-first) |
-| "links to the config and code" | [Reproduce it](#reproduce-it) |
+| "include a prompt-injection test in your write-up ... Transcript required." | [Prompt injection, with the honest part first](#prompt-injection-with-the-honest-part-first) |
+| "links to your config/SOPs/skills/code so another operator could reproduce it. Secrets redacted." | [Reproduce it](#reproduce-it), [`shared/`](shared/) |
 | "Reproducibility is part of the submission ... I set this up in an evening" | [`REPRODUCE.md`](REPRODUCE.md), about ninety minutes of wall clock |
 
 The listing also names what it refuses. Those are worth answering directly:
@@ -40,7 +40,7 @@ This agent does that check in one Telegram message. Two numbers come back, and t
 
 ## What a run looks like
 
-The part that matters most is the one nobody asks for. Verbatim from Telegram, sent by the agent on its own schedule, 1 August 2026:
+The part that matters most is the one that arrives before anyone opens the chat. Verbatim from Telegram, sent by the agent on its own schedule, 1 August 2026:
 
 > **Three lending positions in warning state:**
 >
@@ -101,7 +101,7 @@ That mix produces the one detail we would point a judge at first. Every Kamino l
 
 A host built from source with `--features plugins-wasm-cranelift` and `plugins.enabled = true`. The Telegram channel carries the whole use case. The `supervised` risk profile with `require_approval_for_medium_risk = true` puts an Approve or Deny card in front of every one of our tool calls, showing the arguments before the operator commits. The reply-intent precheck classifies inbound messages before the agent loop starts. SQLite memory holds context across sessions, and `config_read` hands each component its own config section, decrypted from encrypted storage.
 
-**The schedule is the point, and on 3 August it proved itself.** A `[cron.morning-brief]` job wakes the agent at 08:00 Europe/Kiev and announces into the same Telegram channel with nobody asking. That morning it fired on its own for the first time with nothing rescheduled: the scheduler recorded `last=2026-08-03T05:00:20 (ok)` and moved `next` to the following day, and the runtime trace shows the whole chain inside twenty seconds. The tool filter applied at 05:00:03, three calls went out at 05:00:05, the stake reader came back with two accounts and no delinquent validator at 05:00:08, the lending reader returned seven positions from six successful source calls at 05:00:12, and the model answered at 05:00:20. The message that landed opens exactly as the prompt demands: `Your own position: deposit $22, borrow $5, LTV 22.9% against 75% liquidation line, 52.1 percentage points of buffer. Healthy.` The report opens with one line on our own borrow position, healthy or not, and then reports what changed since yesterday and what needs a decision today: a validator that stopped voting, a position that entered its warning buffer, a stake that finished cooling down. When nothing needs action it says so in one line and stops.
+**The schedule is the point, and on 3 August it proved itself.** A `[cron.morning-brief]` job wakes the agent at 08:00 Europe/Kiev and announces into the same Telegram channel on its own schedule. That morning it fired on its own for the first time with nothing rescheduled: the scheduler recorded `last=2026-08-03T05:00:20 (ok)` and moved `next` to the following day, and the runtime trace shows the whole chain inside twenty seconds. The tool filter applied at 05:00:03, three calls went out at 05:00:05, the stake reader came back with two accounts and no delinquent validator at 05:00:08, the lending reader returned seven positions from six successful source calls at 05:00:12, and the model answered at 05:00:20. The message that landed opens exactly as the prompt demands: `Your own position: deposit $22, borrow $5, LTV 22.9% against 75% liquidation line, 52.1 percentage points of buffer. Healthy.` The report opens with one line on our own borrow position, healthy or not, and then reports what changed since yesterday and what needs a decision today: a validator that stopped voting, a position that entered its warning buffer, a stake that finished cooling down. When nothing needs action it says so in one line and stops.
 
 The job is declared in the config file rather than registered through the CLI, and that choice is deliberate. `zeroclaw cron add` writes the job into the scheduler database under a UUID, where it reproduces for nobody. A declarative block is read by whoever reads the config:
 
@@ -219,7 +219,7 @@ The Kamino half depends on Kamino's public REST API, an availability and integri
 
 ## On thin wrappers
 
-The spec rejects a single RPC call padded into WASM, and that test is quantitative. `stake-monitor` merges four RPC methods over at most `2N+2` calls. `stake-tx-build` makes three network calls, one for the cluster genesis hash, one for the blockhash or the nonce account state, one for the standing of the account it is about to touch. The rest of its work is offline: a 1287-line core module that deduplicates account keys, orders them into the four header groups, encodes compact-u16 lengths, and places signature placeholders. The spec itself puts hand-built unsigned transactions in Tier 3. One concession, openly: the Kamino side of the reader is a GET plus shaping, kept because the morning check needs that number.
+The spec rejects a single RPC call padded into WASM, and that test is quantitative. `stake-monitor` merges four RPC methods over at most `2N+2` calls. `stake-tx-build` makes three network calls, one for the cluster genesis hash, one for the blockhash or the nonce account state, one for the standing of the account it is about to touch. The rest of its work is offline: a 1223-line core module that deduplicates account keys, orders them into the four header groups, encodes compact-u16 lengths, and places signature placeholders. The spec itself puts hand-built unsigned transactions in Tier 3. One concession, openly: the Kamino side of the reader is a GET plus shaping, kept because the morning check needs that number.
 
 ## What fought us at the component boundary
 
@@ -255,8 +255,9 @@ fails against the previous commit.
 The single most useful thing it turned up was a green test. One case fed a
 non-finite amount to the parser and then asserted the result was finite from
 inside a `for` loop over the parsed positions. The defect emptied that vector,
-the loop body never ran, and the test passed while guarding nothing. It had
-been green for two weeks over the exact behaviour it was written to protect.
+the loop body never ran, and the test passed while guarding nothing. It was
+green from the day it was written over the exact behaviour it was meant to
+protect.
 
 A second pass did the same to the runbook, walking the real binary through
 every step it names. It found, among others, that two of its own config
@@ -266,9 +267,10 @@ the entire config to defaults with a single warning line, after which every
 symptom points somewhere else. Those are fixed here.
 
 What both passes have in common: the finding only counts once someone has run
-the command and read the output. `tools/check-invariants.py` in the working
-repository then keeps the fixed classes fixed, checking that the numbers in
-these documents still agree with each other and with the repository.
+the command and read the output. A `check-invariants.py` script, private to the
+working repository this one is published from, then keeps the fixed classes
+fixed: it checks that the numbers in these documents still agree with each other
+and with the code they describe.
 
 ## What we got wrong along the way
 
@@ -276,8 +278,8 @@ Separate section on purpose. Scattering these through the text as hedges would
 read as vagueness; collected here they say something specific about how the work
 was checked.
 
-**A test stayed green over the behaviour it was written to protect.** Two weeks
-of that, described above. It is the single most useful thing the adversarial
+**A test stayed green over the behaviour it was written to protect.** Described
+above. It is the single most useful thing the adversarial
 pass found, and it changed how every regression test in this repository is
 written: assert the collection is non-empty before asserting anything about its
 elements.
