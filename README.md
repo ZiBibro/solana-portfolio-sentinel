@@ -8,7 +8,8 @@
 for m in plugins/*/Cargo.toml; do cargo test --locked --manifest-path "$m"; done
 ```
 
-211 tests, no network, no wasm toolchain needed. What a live run prints is in
+211 tests and no wasm toolchain needed. The tests themselves reach no network;
+cargo still fetches the pinned dependencies once. What a live run prints is in
 [What a run looks like](#what-a-run-looks-like) below, taken from the trace
 rather than retyped. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
 [`SHOWCASE.md`](SHOWCASE.md) is the write-up with the custody tier, threat model
@@ -121,15 +122,19 @@ that ran at 18:20 Europe/Kiev on 2 August 2026.
 ```
 Lending health: 7 position(s), worst risk WARN.
 [WARN] main kamino Vanilla@7u3H #HcrU..iS4J: deposit $79162, borrow $57580, LTV 72.7% of 79.9% liq (positions stale 92 h)
+[WARN] main kamino Multiply@47tf #FWjx..Vq67: deposit $65326, borrow $42730, LTV 65.4% of 75.0% liq (positions stale 420 h)
+[WARN] main kamino Vanilla@47tf #6FJt..SSLy: deposit $150623, borrow $96669, LTV 64.2% of 75.0% liq (positions stale 92 h)
 [UNKNOWN] hedge marginfi acct #EN1W..K7ND: deposit $860, borrow $668, LTV n/a (maint basis unavailable)
 [OK] own kamino Vanilla@7u3H #62W5..imgq: deposit $22, borrow $5, LTV 22.8% of 75.0% liq (positions stale 18 h)
+[OK] hedge kamino Vanilla@7u3H #BXSz..zJPW: deposit $3290, borrow $580, LTV 22.0% of 90.0% liq (positions stale 119 h)
 [OK] hedge kamino Vanilla@6WEG #Cz3p..NQqK: deposit $843, borrow $0, no debt (positions stale 119 h)
 ```
 
 Four things in those lines are deliberate. A position whose basis is missing
 reads `UNKNOWN` and gets no invented verdict. A position with no debt says so
-rather than reporting 0% risk. Every line carries how long since Kamino
-reindexed that wallet, so a three-day-old balance never reads as a current one.
+rather than reporting 0% risk. Every Kamino line carries how long since Kamino
+reindexed that wallet, so a three-day-old balance never reads as a current one;
+the MarginFi line has no such timestamp to print.
 And each row names the wallet label it came from: `own` is the operator's own
 debt, the rest are watched addresses.
 
@@ -275,7 +280,7 @@ debugging a plugin that works everywhere except one machine.
 
 The same code was proposed to
 [`zeroclaw-labs/zeroclaw-plugins#63`](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/63)
-on 19 July. The bounty listing was updated on 22 July asking contributors not to
+on 18 July. The bounty listing was updated on 22 July asking contributors not to
 open registry pull requests during the bounty and stating that registry merges
 happen separately after judging, so on 1 August that PR was moved to draft with a
 comment explaining the timing. It keeps its history and stays out of the
