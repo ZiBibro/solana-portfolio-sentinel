@@ -9,7 +9,9 @@ for m in plugins/*/Cargo.toml; do cargo test --locked --manifest-path "$m"; done
 ```
 
 211 tests and no wasm toolchain needed. The tests themselves reach no network;
-cargo still fetches the pinned dependencies once. What a live run prints is in
+cargo still fetches the pinned dependencies once. Timed on a fresh clone on
+3 August 2026: 61 seconds from `git clone` to the last green line, on cargo
+1.97.1 rather than the 1.96.1 the CI pins. What a live run prints is in
 [What a run looks like](#what-a-run-looks-like) below, taken from the trace
 rather than retyped. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
 [`SHOWCASE.md`](SHOWCASE.md) is the write-up with the custody tier, threat model
