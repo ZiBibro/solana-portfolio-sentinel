@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml)
 
-**Reviewing this? Two minutes gets you the whole claim.** Clone, then:
+**Reviewing this? Two minutes gets you the code side of the claim.** Clone, then:
 
 ```bash
 for m in plugins/*/Cargo.toml; do cargo test --locked --manifest-path "$m"; done
