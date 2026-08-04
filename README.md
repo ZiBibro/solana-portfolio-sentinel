@@ -13,12 +13,14 @@ cargo still fetches the pinned dependencies once. Timed on a fresh clone on
 3 August 2026: 61 seconds from `git clone` to the last green line, on cargo
 1.97.1 rather than the 1.96.1 the CI pins. What a live run prints is in
 [What a run looks like](#what-a-run-looks-like) below, taken from the trace
-rather than retyped. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
+copied out of the trace. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
 [`SHOWCASE.md`](SHOWCASE.md) is the write-up with the custody tier, threat model
 and honest limits, and [`shared/`](shared/) is the composition that makes it a
 daily habit instead of a library.
 
-**Where this sits in the field, counted rather than asserted.** Measured
+**Watch it run (2:11):** https://www.youtube.com/watch?v=nRbTZSxMAQg
+
+**Where this sits in the field, counted.** Measured
 2026-08-03 against all 109 open pull requests in `zeroclaw-labs/zeroclaw-plugins`
 and the 31 plugins already in the registry:
 
@@ -31,10 +33,9 @@ and the 31 plugins already in the registry:
 So the reading side is a crowded niche and this submission says so. The claim it
 does make is narrower and checkable: the unsigned stake transaction builder has
 no counterpart among the open PRs, and the nearest neighbour by craft is
-[#151](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/151), which parses
-transactions where this one constructs them. The other overlap worth naming is
+[#151](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/151), which parses transactions where this one builds them. The other overlap worth naming is
 [#104](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/104), which also
-returns unsigned transactions, for Kamino repayments rather than for stake.
+returns unsigned transactions, for Kamino repayments where this one covers stake.
 
 ---
 
@@ -117,24 +118,24 @@ summary states the roughly 60 to 90 second blockhash window.
 
 ## What a run looks like
 
-Verbatim from the tools, not retyped. This is the payload the model is handed;
-what reaches the chat is its rendering of it. Captured from the scheduled brief
-that ran at 18:20 Europe/Kiev on 2 August 2026.
+Verbatim from the tools, copied out of the trace. This is the payload the model is handed;
+what reaches the chat is its rendering of it. Captured from the morning brief the
+cron job fired on its own at 08:00 Europe/Kiev on 4 August 2026.
 
 ```
 Lending health: 7 position(s), worst risk WARN.
-[WARN] main kamino Vanilla@7u3H #HcrU..iS4J: deposit $79162, borrow $57580, LTV 72.7% of 79.9% liq (positions stale 92 h)
-[WARN] main kamino Multiply@47tf #FWjx..Vq67: deposit $65326, borrow $42730, LTV 65.4% of 75.0% liq (positions stale 420 h)
-[WARN] main kamino Vanilla@47tf #6FJt..SSLy: deposit $150623, borrow $96669, LTV 64.2% of 75.0% liq (positions stale 92 h)
+[WARN] main kamino Vanilla@7u3H #HcrU..iS4J: deposit $84055, borrow $60092, LTV 71.5% of 79.9% liq (positions stale 24 h)
+[WARN] main kamino Multiply@47tf #FWjx..Vq67: deposit $52273, borrow $34183, LTV 65.4% of 75.0% liq (positions stale 24 h)
+[WARN] main kamino Vanilla@47tf #6FJt..SSLy: deposit $148455, borrow $96703, LTV 65.1% of 75.0% liq (positions stale 24 h)
 [UNKNOWN] hedge marginfi acct #EN1W..K7ND: deposit $860, borrow $668, LTV n/a (maint basis unavailable)
-[OK] own kamino Vanilla@7u3H #62W5..imgq: deposit $22, borrow $5, LTV 22.8% of 75.0% liq (positions stale 18 h)
-[OK] hedge kamino Vanilla@7u3H #BXSz..zJPW: deposit $3290, borrow $580, LTV 22.0% of 90.0% liq (positions stale 119 h)
-[OK] hedge kamino Vanilla@6WEG #Cz3p..NQqK: deposit $843, borrow $0, no debt (positions stale 119 h)
+[OK] own kamino Vanilla@7u3H #62W5..imgq: deposit $22, borrow $5, LTV 22.6% of 75.0% liq (positions stale 56 h)
+[OK] hedge kamino Vanilla@7u3H #BXSz..zJPW: deposit $3291, borrow $585, LTV 22.2% of 90.0% liq (positions stale 157 h)
+[OK] hedge kamino Vanilla@6WEG #Cz3p..NQqK: deposit $844, borrow $0, no debt (positions stale 157 h)
 ```
 
 Four things in those lines are deliberate. A position whose basis is missing
 reads `UNKNOWN` and gets no invented verdict. A position with no debt says so
-rather than reporting 0% risk. Every Kamino line carries how long since Kamino
+instead of reporting 0% risk. Every Kamino line carries how long since Kamino
 reindexed that wallet, so a three-day-old balance never reads as a current one;
 the MarginFi line has no such timestamp to print.
 And each row names the wallet label it came from: `own` is the operator's own
@@ -149,7 +150,7 @@ Stake: 2 account(s), 1.099 SOL delegated, epoch 1112 at 74% (~12 h left).
 ```
 
 An address outside the operator's allowlist is refused before any RPC call, and
-the refusal names what is configured rather than echoing the request back:
+the refusal names what is configured, and never echoes the request back:
 
 ```
 wallet `9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM` is not in the configured
@@ -174,7 +175,7 @@ All five confirm with `err: null`.
 
 **Read the middle two rows precisely.** They were submitted with the Solana CLI
 to build the devnet stand, and they are the events that gave `stake-monitor`
-real lifecycle states to report rather than fixtures. They are evidence for the
+real lifecycle states to report, no fixtures. They are evidence for the
 reader.
 
 **Nothing the builder produced has ever been sent to a network, and that is the
@@ -189,7 +190,7 @@ stays with the operator.
 
 ## Safety model
 
-Structural rather than prompt-based, in four parts:
+Structural, written into the components, in four parts:
 
 - **No custody.** No private key appears in config or code. The builder returns
   bytes; signing happens elsewhere, by a human.
@@ -232,7 +233,7 @@ zeroclaw plugin install .
 The `.wasm` must sit beside `manifest.toml` when the installer runs, which is
 why it is copied up from `target/`. Built artifacts are not committed here.
 
-Running `plugin install` a second time is refused rather than ignored:
+Running `plugin install` a second time is refused, never silently ignored:
 
 ```
 Error: plugin 'lending-health' is already loaded
@@ -246,7 +247,7 @@ remove the plugin first:
 zeroclaw plugin remove lending-health && zeroclaw plugin install .
 ```
 
-Configuration keys, worked examples, and the permissions a plugin requests are
+Configuration keys with worked examples, and the permissions a plugin requests are
 documented in its own README under `plugins/`.
 
 ## Validation
