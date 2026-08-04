@@ -1,0 +1,9 @@
+docs: the demo video is up, and both entry documents link to it
+
+README.md and SHOWCASE.md now open with the run itself: 2 minutes 11
+seconds, a live agent on a schedule. The quoted tool output in both files
+was refreshed to the morning brief the cron job fired on its own at 08:00
+on 4 August, replacing a run that had been started by hand.
+
+Prose edits alongside: the section that restated the bounty listing is
+gone, and the rhetorical tic it carried with it.

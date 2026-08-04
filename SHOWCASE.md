@@ -4,31 +4,22 @@ The long version. [`README.md`](README.md) is the two-minute one, and
 [`REPRODUCE.md`](REPRODUCE.md) is the runbook that stands the whole thing up
 from a bare machine.
 
-## What the brief asks for, and where each answer is
+**Watch it run (2:11):** https://www.youtube.com/watch?v=nRbTZSxMAQg
 
-The listing names what a write-up must contain. Each row quotes it and points at
-the section that answers it, so nothing has to be hunted for.
+## Where to look first
 
-| what the listing asks | where it is answered |
-|---|---|
-| "what it does" | [The job](#the-job), [What a run looks like](#what-a-run-looks-like) |
-| "who it's for" | [The job](#the-job), final paragraph |
-| "which ZeroClaw features it uses" | [Which ZeroClaw features it uses](#which-zeroclaw-features-it-uses) |
-| "what (if anything) you had to build" | [What we had to build](#what-we-had-to-build) |
-| "its custody tier" | [Custody tier](#custody-tier) |
-| "and threat model" | [Threat model](#threat-model) |
-| "include a prompt-injection test in your write-up ... Transcript required." | [Prompt injection, with the honest part first](#prompt-injection-with-the-honest-part-first) |
-| "links to your config/SOPs/skills/code so another operator could reproduce it. Secrets redacted." | [Reproduce it](#reproduce-it), [`shared/`](shared/) |
-| "Reproducibility is part of the submission ... I set this up in an evening" | [`REPRODUCE.md`](REPRODUCE.md), about ninety minutes of wall clock |
+Three minutes of reading, in the order that answers the questions a reviewer
+actually has. [The job](#the-job) says what it does and who carries the problem.
+[What a run looks like](#what-a-run-looks-like) prints the tool output verbatim,
+so the claims can be checked against bytes. [Custody tier](#custody-tier) and
+[Threat model](#threat-model) state what it holds and what it refuses to hold.
+[Prompt injection](#prompt-injection-with-the-honest-part-first) carries a live
+transcript, including the layer that failed. [Reproduce it](#reproduce-it) puts
+a bare machine on the same footing as ours in about ninety minutes.
 
-The listing also names what it refuses. Those are answered directly:
-
-| what the listing refuses | why this is not that |
-|---|---|
-| "Concepts, mockups, or slideware. The agent must run." | It runs on a schedule with nobody watching, and the transactions behind every claim are linked from the README |
-| "A plugin with no use case around it. Components are not submissions here." | [`shared/`](shared/) carries the cron job, two skills and the SOP that turn three components into a morning habit |
-| "Thin single-RPC-call wrappers padded into WASM" | [On thin wrappers](#on-thin-wrappers) answers this one head on, including the one piece deliberately left as a skill because it *is* one GET plus arithmetic |
-| "Anything holding a raw private key with no caps, no allowlist, and no approval gate" | No key is held anywhere. Every address comes from an operator-owned allowlist, and the builder emits an unsigned transaction behind an approval card |
+The parts that are usually missing from a plugin submission live in
+[`shared/`](shared/): the cron job that makes this a habit, two skills, and a procedure
+that stops at a human checkpoint before anything gets built. Components alone would be a library.
 
 ## The job
 
@@ -62,17 +53,17 @@ Read what it does there. Every finding carries its options and none carries a re
 
 The link between a 100% commission and a zero reward is the model's own. We put two facts side by side and left it room.
 
-That message is the model's rendering. Underneath it the tools return something denser, and this is what the model is given, taken from the later brief that ran at 18:20 Europe/Kiev on 2 August:
+That message is the model's rendering. Underneath it the tools return something denser, and this is what the model is given, taken from the morning brief the cron job fired on its own at 08:00 Europe/Kiev on 4 August:
 
 ```
 Lending health: 7 position(s), worst risk WARN.
-[WARN] main kamino Vanilla@7u3H #HcrU..iS4J: deposit $79162, borrow $57580, LTV 72.7% of 79.9% liq (positions stale 92 h)
-[WARN] main kamino Multiply@47tf #FWjx..Vq67: deposit $65326, borrow $42730, LTV 65.4% of 75.0% liq (positions stale 420 h)
-[WARN] main kamino Vanilla@47tf #6FJt..SSLy: deposit $150623, borrow $96669, LTV 64.2% of 75.0% liq (positions stale 92 h)
+[WARN] main kamino Vanilla@7u3H #HcrU..iS4J: deposit $84055, borrow $60092, LTV 71.5% of 79.9% liq (positions stale 24 h)
+[WARN] main kamino Multiply@47tf #FWjx..Vq67: deposit $52273, borrow $34183, LTV 65.4% of 75.0% liq (positions stale 24 h)
+[WARN] main kamino Vanilla@47tf #6FJt..SSLy: deposit $148455, borrow $96703, LTV 65.1% of 75.0% liq (positions stale 24 h)
 [UNKNOWN] hedge marginfi acct #EN1W..K7ND: deposit $860, borrow $668, LTV n/a (maint basis unavailable)
-[OK] own kamino Vanilla@7u3H #62W5..imgq: deposit $22, borrow $5, LTV 22.8% of 75.0% liq (positions stale 18 h)
-[OK] hedge kamino Vanilla@7u3H #BXSz..zJPW: deposit $3290, borrow $580, LTV 22.0% of 90.0% liq (positions stale 119 h)
-[OK] hedge kamino Vanilla@6WEG #Cz3p..NQqK: deposit $843, borrow $0, no debt (positions stale 119 h)
+[OK] own kamino Vanilla@7u3H #62W5..imgq: deposit $22, borrow $5, LTV 22.6% of 75.0% liq (positions stale 56 h)
+[OK] hedge kamino Vanilla@7u3H #BXSz..zJPW: deposit $3291, borrow $585, LTV 22.2% of 90.0% liq (positions stale 157 h)
+[OK] hedge kamino Vanilla@6WEG #Cz3p..NQqK: deposit $844, borrow $0, no debt (positions stale 157 h)
 ```
 
 ```
@@ -81,7 +72,7 @@ Stake: 2 account(s), 1.099 SOL delegated, epoch 1112 at 74% (~12 h left).
 [active] spare: 1.099 SOL, validator APsE.. ok, vote lag 0 slot(s), fee 0.0%, last reward 0.002 SOL
 ```
 
-**Read the labels before the numbers.** `own` is the only line that is our money. `main` and `hedge` are labels we gave to watched public addresses, and the six-figure deposits on those lines belong to someone else; the label says which entry in our allowlist a line came from, not who holds it. We kept the names we had been using rather than renaming them for the write-up, so they are explained here instead.
+**Read the labels before the numbers.** `own` is the only line that is our money. `main` and `hedge` are labels we gave to watched public addresses, and the six-figure deposits on those lines belong to someone else; the label says which entry in our allowlist a line came from, not who holds it. We kept the names we had been using, so they are explained here instead of renamed for the write-up.
 
 The `positions stale N h` hint on the lending lines is deliberate, and it is the part of that report we would defend hardest. Kamino's portfolio response carries two timestamps: `pricesRefreshedOn`, which tracks the clock, and `positionsRefreshedOn`, which moves only when Kamino reindexes that wallet. The reader prints the gap between them. A position last indexed sixty-nine hours ago is priced with today's SOL, so its ratio is a blend of fresh prices and a stale balance, and saying so costs one clause. The alternative, printing the number bare, would present a three-day-old position as a current reading. This is the same rule the UNKNOWN line follows: report what is actually known, and name what is not.
 
@@ -89,13 +80,13 @@ The stake header carries a second lesson. Two accounts hold 2.107 SOL between th
 
 Both reports are capped at 900 characters: dense facts, no prose. Shaping output is the third trap in the bounty spec, and the cap is where we answer it. A raw `getProgramAccounts` reply would cost the operator real money on every scheduled call and drown the context the model needs.
 
-**Whose accounts these are.** The stake accounts are ours: we created them, funded them, and delegated them on devnet with keys we hold, and every delegation lifecycle state in the reports above was observed on them. The transactions the builder produces were accepted by a real Solana runtime, which is the half of this system where custody mechanics actually get proven.
+**Whose accounts these are.** The stake accounts are ours: we created and funded them on devnet, then delegated them with keys we hold, and every delegation lifecycle state in the reports above was observed on them. The transactions the builder produces were accepted by a real Solana runtime, which is the half of this system where custody mechanics actually get proven.
 
-The lending side carries our own debt. The `own` line is a mainnet Kamino position on the SOL/BTC market opened for this system, wallet `5BqYh848cGwSUXapu5rqMmFEDpNXXG8hQipK6F71zvWS`: 0.3 SOL of collateral against 5 USDC borrowed, opened at 23.3% of its 75% liquidation line and printing 22.8% in the brief on 2 August. That figure moves with the SOL price, which is the point: the brief reprints it every morning rather than quoting a number fixed at open. Both transactions are on chain, the deposit at `5c8RyMPG…` and the borrow at `4w7dsihH…`. It is a small position on purpose; the point is that the number the agent reports every morning is a number we are actually exposed to.
+The lending side carries our own debt. The `own` line is a mainnet Kamino position on the SOL/BTC market opened for this system, wallet `5BqYh848cGwSUXapu5rqMmFEDpNXXG8hQipK6F71zvWS`: 0.3 SOL of collateral against 5 USDC borrowed, opened at 23.3% of its 75% liquidation line and printing 22.6% in the morning brief on 4 August. That figure moves with the SOL price, which is the point: the brief reprints it every morning, so the number never freezes at the value it had on opening day. Both transactions are on chain, the deposit at `5c8RyMPG…` and the borrow at `4w7dsihH…`. It is a small position on purpose; the point is that the number the agent reports every morning is a number we are actually exposed to.
 
 The other wallets stay in the allowlist as watched addresses, and they earn their place: they carry positions large enough that a real liquidation line exercises the reader in ways a $22 position cannot, and their arithmetic is worth checking against a case that hurts. The report labels each line by which wallet it came from, so nothing implies a debt we do not carry.
 
-That mix produces the one detail we would point a judge at first. Every Kamino line in the 2 August run carries the gap since Kamino last reindexed that wallet, and the spread does the arguing: our own position reads 18 hours while the watched ones read 92, 119 and 420. On the night it was opened it printed with no hint at all, because the reindex had landed one second after the deposit. The same reader, the same run, and the difference is visible in the output rather than asserted in prose.
+That mix produces the one detail we would point a judge at first. Every Kamino line in the run above carries the gap since Kamino last reindexed that wallet, and the spread does the arguing: the watched positions read 24 hours, the hedge wallets 157, and our own 56. On the night it was opened it printed with no hint at all, because the reindex had landed one second after the deposit. The same reader, the same run, and the difference shows up in the output itself.
 
 ## Which ZeroClaw features it uses
 
@@ -103,7 +94,7 @@ A host built from source with `--features plugins-wasm-cranelift` and `plugins.e
 
 **The schedule is the point, and on 3 August it proved itself.** A `[cron.morning-brief]` job wakes the agent at 08:00 Europe/Kiev and announces into the same Telegram channel on its own schedule. That morning it fired on its own for the first time with nothing rescheduled: the scheduler recorded `last=2026-08-03T05:00:20 (ok)` and moved `next` to the following day, and the runtime trace shows the whole chain inside twenty seconds. The tool filter applied at 05:00:03, three calls went out at 05:00:05, the stake reader came back with two accounts and no delinquent validator at 05:00:08, the lending reader returned seven positions from six successful source calls at 05:00:12, and the model answered at 05:00:20. The message that landed opens exactly as the prompt demands: `Your own position: deposit $22, borrow $5, LTV 22.9% against 75% liquidation line—52.1 percentage points of buffer. Healthy.` The report opens with one line on our own borrow position, healthy or not, and then reports what changed since yesterday and what needs a decision today: a validator that stopped voting, a position that entered its warning buffer, a stake that finished cooling down. When nothing needs action it says so in one line and stops.
 
-The job is declared in the config file rather than registered through the CLI, and that choice is deliberate. `zeroclaw cron add` writes the job into the scheduler database under a UUID, where it reproduces for nobody. A declarative block is read by whoever reads the config:
+The job is declared in the config file, and that choice is deliberate. `zeroclaw cron add` writes the job into the scheduler database under a UUID, where it reproduces for nobody. A declarative block is read by whoever reads the config:
 
 ```toml
 [cron.morning-brief]
@@ -131,7 +122,7 @@ Two readers and one builder, each a `wasm32-wasip2` component in the `plugins/re
 
 `lending-health` reads Kamino over REST and decodes MarginFi accounts from chain state, 2312 raw bytes with `i80f48` fixed-point at four offsets, gated on the program's own `ENGINE_OK` flag. The liquidation buffer follows Kamino's own norm, `(liquidation_ltv - ltv) / liquidation_ltv`, and the warning thresholds compare against that relative form. The `7.0% buffer` in the Telegram line above is the model's own subtraction, 79.9 minus 72.9 in percentage points, which measures the same gap on a different basis.
 
-`stake-monitor` merges four RPC methods across the configured accounts into two lines: delegation lifecycle, validator delinquency and vote lag, epoch progress, plus the previous epoch's reward.
+`stake-monitor` merges four RPC methods across the configured accounts into two lines: delegation lifecycle and validator health, including vote lag, epoch progress, plus the previous epoch's reward.
 
 `stake-tx-build` produces unsigned delegate and deactivate transactions with no `solana-sdk` anywhere, compiling and serializing the legacy message by hand. Durable nonces are supported with `AdvanceNonceAccount` placed first, the condition Solana requires for durability. A golden test pins the byte layout against a real mainnet delegate transaction. On devnet, `simulateTransaction` returned `err: null` for both actions, at 16956 and 10882 compute units.
 
@@ -155,7 +146,7 @@ Addresses resolve only against operator-owned allowlists, so a hijacked model ca
 
 **The model invented an allowlist entry while we were testing this, which is the clearest argument for where the boundary lives.** On 3 August a delegation to an address outside the allowlist was approved by the operator and refused by the component. The plugin returned exactly one line to the model: ``Error: vote account `vgcDar2pry…` is not in the configured allowed_vote_accounts allowlist``. No list of permitted addresses is in that string. The model's reply to the operator nonetheless announced "your configured delegation targets are" and named two: one that is genuinely in the config, and one that exists nowhere in it. A search of the config, the trace and the memory databases puts that second address first appearing inside the model's own response. It then repeated the invention in a later turn, having read it back from its own context.
 
-Nothing was at risk, and that is the point. The allowlist is compared inside the component before any byte is assembled, so a model that misremembers policy produces a wrong sentence rather than a wrong transaction. Had enforcement lived in the prompt, the same confusion would have been a hole.
+Nothing was at risk, and that is the point. The allowlist is compared inside the component before any byte is assembled, so a model that misremembers policy produces a wrong sentence, never a wrong transaction. Had enforcement lived in the prompt, the same confusion would have been a hole.
 
 **The unattended run is the case that deserves the most care, so it holds the least power.** A scheduled job runs with nobody watching, which is exactly when an approval card is worth nothing. So the morning brief is granted two tools, both read-only: `allowed_tools = ["lending_health", "stake_monitor"]`. The transaction builder is absent from the grant entirely, so no amount of persuasion inside a scheduled run reaches it. `stake_tx_build` exists only in dialogue, where a human is present by definition and every call raises a card until that human chooses to stop being asked. The job also carries `uses_memory = false` and `session_target = "isolated"`, so a poisoned string one morning cannot wait in memory for the next.
 
@@ -193,7 +184,7 @@ That is the host working as designed, and it means your own injection test may d
 
 **That layer is best-effort by design.** On 2026-08-02 the same classifier produced two verdicts we had not seen before. It stopped a legitimate operator request that named a procedure by its internal id, recording `kind: Failed` with the invented reason `SOP 'stake-deactivation-review' not found in available tools/skills` for a procedure the runtime had loaded, and it sent the operator nothing at all. Five minutes later, on a slow provider call, it wrote `reply-intent precheck timed out; failing open` and forwarded the next message unchecked.
 
-The second one is deliberate upstream behaviour rather than a defect, and the distinction matters. `zeroclaw#6067`, closed on 8 July, added the timeout and the model knob to this classifier and specified failing open on timeout, preserving what the code already did. So an operator reading `timeout_secs = 5` in their config is reading a latency budget after which the filter yields, and the docs do not spell that out. We measured it rather than assumed it, and we are not filing it as a bug.
+The second one is deliberate upstream behaviour, and that distinction matters. `zeroclaw#6067`, closed on 8 July, added the timeout and the model knob to this classifier and specified failing open on timeout, preserving what the code already did. So an operator reading `timeout_secs = 5` in their config is reading a latency budget after which the filter yields, and the docs do not spell that out. We measured it, and we are not filing it as a bug.
 
 What follows for a threat model is the useful part: the outermost layer over-refuses in one direction and yields under latency in the other, so nothing in our custody story rests on it. What does carry weight is the allowlist, which is ours, is enforced in the component, and has no timeout or override at all.
 
