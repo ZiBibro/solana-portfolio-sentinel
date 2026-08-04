@@ -1,9 +1,10 @@
-docs: the demo video is up, and both entry documents link to it
+docs: name the cadence limit, and what it would take to close it
 
-README.md and SHOWCASE.md now open with the run itself: 2 minutes 11
-seconds, a live agent on a schedule. The quoted tool output in both files
-was refreshed to the morning brief the cron job fired on its own at 08:00
-on 4 August, replacing a run that had been started by hand.
+The brief runs once a day, so a position that walks into its warning
+buffer overnight is reported hours later. The write-up now says this in
+the limits section, along with the part that makes it a gap and not a
+wall: the schedule is one line of config, and the same components already
+answer on demand.
 
-Prose edits alongside: the section that restated the bounty listing is
-gone, and the rhetorical tic it carried with it.
+A lending position has no stop-loss to arm, which is why the cadence
+carries more weight here than it would on an exchange.
