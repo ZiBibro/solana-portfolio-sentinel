@@ -43,15 +43,13 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Host tests
+      # The same entry point the README hands a reviewer. It runs every host
+      # test and fails the job on any failing test, so the reviewer path cannot
+      # rot unnoticed. The wasm half is skipped here; the build step below
+      # covers it.
+      - name: Host tests via the reviewer entry point
         shell: bash
-        run: |
-          set -euo pipefail
-          for manifest in plugins/*/Cargo.toml; do
-            echo "::group::test ${manifest}"
-            cargo test --locked --manifest-path "$manifest"
-            echo "::endgroup::"
-          done
+        run: bash demo/run-demo.sh --no-wasm
 
       - name: Clippy on the host target
         shell: bash
