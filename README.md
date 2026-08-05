@@ -1,4 +1,4 @@
-# solana-portfolio-sentinel
+﻿# solana-portfolio-sentinel
 
 [![CI](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml)
 
@@ -120,7 +120,7 @@ summary states the roughly 60 to 90 second blockhash window.
 
 Verbatim from the tools, copied out of the trace. This is the payload the model is handed;
 what reaches the chat is its rendering of it. Captured from the morning brief the
-cron job fired on its own at 08:00 Europe/Kiev on 4 August 2026.
+cron job fired on its own at 08:00 Europe/Kyiv on 4 August 2026.
 
 ```
 Lending health: 7 position(s), worst risk WARN.

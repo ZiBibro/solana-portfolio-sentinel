@@ -1,4 +1,4 @@
-# REPRODUCE: standing up the Solana portfolio sentinel from nothing
+﻿# REPRODUCE: standing up the Solana portfolio sentinel from nothing
 
 This is the operator runbook for the use case shown in the demo: a ZeroClaw agent
 living in a Telegram channel that reads a Solana lending position, reads the
@@ -721,7 +721,7 @@ prompt = "Morning check on my Solana positions. Call stake_monitor for my stake 
 [cron.morning-brief.schedule]
 kind = "cron"
 expr = "0 8 * * *"
-tz = "Europe/Kiev"
+tz = "Europe/Kyiv"
 
 [cron.morning-brief.delivery]
 mode = "announce"
@@ -780,10 +780,10 @@ $ zeroclaw cron add '*/5 * * * *' 'echo ok'
 error: the following required arguments were not provided:
   --agent <AGENT_ALIAS>
 
-$ zeroclaw cron add --agent sentinel --tz Europe/Kiev '*/5 * * * *' 'Reply with one word'
+$ zeroclaw cron add --agent sentinel --tz Europe/Kyiv '*/5 * * * *' 'Reply with one word'
 Error: blocked by security policy: Command not allowed by security policy: Reply with one word
 
-$ zeroclaw cron add --agent sentinel --prompt --tz Europe/Kiev '*/5 * * * *' 'Reply with one word'
+$ zeroclaw cron add --agent sentinel --prompt --tz Europe/Kyiv '*/5 * * * *' 'Reply with one word'
 ✅ Added agent cron job 63b07f1e-af3b-4ae7-8433-87eeba845946
 ```
 
