@@ -84,9 +84,17 @@ zeroclaw sop validate stake-deactivation-review
 zeroclaw sop graph stake-deactivation-review
 ```
 
-The graph prints five steps in order with `manual` feeding step one. Runs start
-when the agent calls `sop_execute`, which it does when asked to walk through a
-deactivation. The cron trigger type exists in the SOP schema but no live
-scheduler feeds the SOP dispatcher in this version, so the daily brief runs as a
-top-level `[cron.*]` job instead. That is documented in
-[`REPRODUCE.md`](../REPRODUCE.md) with the full config.
+The graph prints five steps in order with `manual` feeding step one.
+
+**Starting a run: use the gateway, not the chat.** The trigger is `manual`, and
+on the pinned host asking the agent in the channel did not start a run in three
+consecutive attempts: `sop_execute` appears zero times in the trace for all
+three, and naming the procedure by id gets the message killed by the reply-intent
+precheck first. What worked is the host's HTTP gateway, `POST /pair` followed by
+`POST /api/sops/stake-deactivation-review/run`. The checkpoint is then advanced
+with `sop approve` on the CLI or `POST /admin/sop/approve`, never from the
+messenger. [`REPRODUCE.md`](../REPRODUCE.md) section 7.4 carries the exact calls.
+
+The daily brief is a top-level `[cron.*]` job rather than a cron-triggered SOP.
+That split is deliberate and is documented with the full config in
+[`REPRODUCE.md`](../REPRODUCE.md).

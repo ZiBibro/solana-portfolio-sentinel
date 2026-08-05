@@ -8,9 +8,10 @@ cooldown_secs = 0
 max_concurrent = 1
 agent = "sentinel"
 
-# Agent-initiated. The operator asks in the channel and the agent fires this
-# with sop_execute. The cron trigger type exists in the schema but no live
-# scheduler feeds the SOP dispatcher in this version, so the daily brief runs
-# as a top-level [cron.morning-brief] job instead of as a triggered SOP.
+# Manual. Start a run through the host's HTTP gateway: POST /pair, then
+# POST /api/sops/stake-deactivation-review/run. Asking the agent in the channel
+# did not work on the pinned host and is not the documented path; see
+# shared/README.md and REPRODUCE.md section 7.4. The daily brief is a top-level
+# [cron.morning-brief] job rather than a cron-triggered SOP.
 [[triggers]]
 type = "manual"

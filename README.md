@@ -1,4 +1,4 @@
-﻿# solana-portfolio-sentinel
+# solana-portfolio-sentinel
 
 [![CI](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml)
 
@@ -14,14 +14,15 @@ byte-exact transaction goldens. Drop `--no-wasm` and it also builds the three
 components and prints their byte sizes with a sha256 prefix. Every number comes
 out of that run; nothing in the output is typed by hand. A run on 5 August 2026
 printed 216 tests passed, 57 of them on refusal and unknown paths, and three
-components at 396180, 353372 and 378000 bytes.
+components at 396225, 353372 and 378000 bytes.
 
 216 tests and no wasm toolchain needed for the `--no-wasm` path. The tests
 themselves reach no network; cargo still fetches the pinned dependencies once.
-Timed on a fresh clone on 3 August 2026: 61 seconds from `git clone` to the last
-green line, on cargo 1.97.1 rather than the 1.96.1 the CI pins. What a live run
-prints is in [What a run looks like](#what-a-run-looks-like) below, taken from
-the trace. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
+Timed on a fresh clone on 5 August 2026: 75 seconds from `git clone` to the last
+green line, on cargo 1.97.1 rather than the 1.96.1 the CI pins, with the crates
+already in the local cargo cache. Budget two to three minutes if that cache is
+cold, which is what the script's own header says. What a live run prints is in
+[What a run looks like](#what-a-run-looks-like) below, taken from the trace. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
 [`SHOWCASE.md`](SHOWCASE.md) is the write-up with the custody tier, threat model
 and honest limits, and [`shared/`](shared/) is the composition that makes it a
 daily habit instead of a library.
@@ -113,8 +114,11 @@ discriminants, account metas) with no `solana-sdk` dependency. The reason is
 size and auditability rather than capability: the modular Solana crates do
 compile to `wasm32-wasip2`, and a component pulling them in still builds, so the
 hand-rolled path is a choice to keep the component minimal and every byte
-traceable to a test. The instruction bytes are locked by a golden test that
-reproduces a live mainnet delegate transaction byte for byte.
+traceable to a test. The instruction bytes are locked by a golden test against a
+live mainnet delegate transaction: the instruction data matches byte for byte,
+and every compiled account index resolves to the same pubkey on both sides. The
+whole message cannot match, because that mainnet transaction carries four
+instructions where the builder emits one.
 
 Before building anything it verifies the endpoint's genesis hash against the
 operator's pinned cluster and refuses on mismatch, so an honest endpoint pointed
@@ -152,18 +156,22 @@ debt, the rest are watched addresses.
 The stake side, same run:
 
 ```
-Stake: 2 account(s), 1.099 SOL delegated, epoch 1112 at 74% (~12 h left).
+Stake: 2 account(s), 1.101 SOL delegated, epoch 1113 at 60% (~19 h left).
 [inactive] main: 1.008 SOL, validator deep.. ok, vote lag 0 slot(s), fee 100.0%
-[active] spare: 1.099 SOL, validator APsE.. ok, vote lag 0 slot(s), fee 0.0%, last reward 0.002 SOL
+[active] spare: 1.101 SOL, validator APsE.. ok, vote lag 0 slot(s), fee 0.0%, last reward 0.002 SOL
 ```
 
-An address outside the operator's allowlist is refused before any RPC call, and
-the refusal names what is configured, and never echoes the request back:
+An address outside the operator's allowlist is refused before any RPC call. The
+refusal quotes the address that was asked for and names the labels that are
+configured, and it never discloses the addresses behind those labels:
 
 ```
 wallet `9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM` is not in the configured
-allowlist; known labels: main, hedge
+allowlist; known labels: own, main, hedge
 ```
+
+The raw trace rows for that refusal, timed, are in
+[`demo/injection-drill/`](demo/injection-drill/README.md).
 
 ## On-chain transactions behind these claims
 
@@ -177,7 +185,7 @@ plugin is written against.
 | The borrow against it, 5 USDC | mainnet | Kamino Lend `KLend2g3…` | [`4w7dsihH…`](https://solscan.io/tx/4w7dsihHBa6BvjgBKFqCozktPEp72UhHTksyRPjsf7H2y6f1TBVday9hr719ABe7tjE6rDX9jQvXunKwEpZoYGz4) |
 | The `delegate` that put the demo stake account into its `activating` state | devnet | Stake Program | [`3DwoSx4Y…`](https://explorer.solana.com/tx/3DwoSx4YSgfyamK96HixCC1agXQwWg6ru6G4BQHdTRY13cqwZh9rh9EQDS3BTdNkFNgTNVbxS1dadiByoPubS8qc?cluster=devnet) |
 | The `deactivate` that produced the `deactivating` reading | devnet | Stake Program | [`2BrRUssX…`](https://explorer.solana.com/tx/2BrRUssXQ8byT6pKaFX6Vrgqh9fYPvbmUan1tRqHgag158DFfRdX5jxmDugzikCPANhb2zovtujVRuUqGzvGXWR4?cluster=devnet) |
-| The mainnet `delegate` a golden test reproduces byte for byte | mainnet | Stake Program | [`5yaZiJMV…`](https://solscan.io/tx/5yaZiJMVnN5fM5K4rHQFrntaprKQJJbuLqiVGWh7Dkg1MqtswUno83BTozmzN8xAfLZTtFTZiwhTUZsmNoa5kVRA) |
+| The mainnet `delegate` the two golden tests are pinned against | mainnet | Stake Program | [`5yaZiJMV…`](https://solscan.io/tx/5yaZiJMVnN5fM5K4rHQFrntaprKQJJbuLqiVGWh7Dkg1MqtswUno83BTozmzN8xAfLZTtFTZiwhTUZsmNoa5kVRA) |
 
 All five confirm with `err: null`.
 
