@@ -127,7 +127,7 @@ fn synthetic_maintenance_fixture_reports_a_distance() {
 fn synthetic_maintenance_fixture_renders_a_measured_line() {
     let positions = parse_gpa_response(GPA_MAINT_SYNTHETIC, "main").unwrap();
     let report = render_report(&positions, &config());
-    // The dollar figures are unweighted: 700/1000 is 70%, not the 75% printed
+    // The dollar figures come from the init-weight pair: 700/1000 is 70%, not the 75% printed
     // beside them. Both numbers are right on their own basis, so the line says
     // which basis the percentage uses rather than looking like a defect.
     // MarginFi liquidates when the maintenance-weighted ratio reaches 1.0, so

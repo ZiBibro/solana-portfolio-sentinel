@@ -194,6 +194,10 @@ pub fn decode_account(data: &[u8], pubkey: &str, wallet_label: &str) -> Option<P
         account: short_account(pubkey),
         deposit_usd: asset,
         borrow_usd: liability,
+        // The health cache is decoded at fixed offsets, so the liability is
+        // either read or the whole account is rejected; there is no substituted
+        // zero on this path.
+        borrow_measured: true,
         liquidation,
         flagged_unhealthy: condemned,
         stale_hint,

@@ -96,9 +96,12 @@ column. Kamino publishes a protocol LTV: risk-adjusted debt over collateral,
 against a per-reserve liquidation threshold. MarginFi has no equivalent figure,
 so its ratio is maintenance-weighted liabilities over maintenance-weighted
 assets, liquidatable at 1.0, and its lines are prefixed `maint LTV`. The dollar
-amounts printed beside the ratio are unweighted for both protocols, so a MarginFi
-line can show $1,000 deposit, $700 borrow and `maint LTV 75.0%` without
-contradicting itself. The buffer normalizes the two bases, which is why one
+amounts printed beside the ratio are on a different basis from the ratio itself:
+Kamino's are its plain position values, and MarginFi's come from the health
+cache's initial-weight pair, which carries the program's own confidence and
+price discounts. So a MarginFi line can show $1,000 deposit, $700 borrow and
+`maint LTV 75.0%` without contradicting itself, because the ratio is
+maintenance-weighted and the amounts are not. The buffer normalizes the two bases, which is why one
 threshold pair governs both.
 
 ## Layout (the reference format)

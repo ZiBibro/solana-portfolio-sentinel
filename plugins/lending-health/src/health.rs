@@ -78,8 +78,9 @@ impl Protocol {
     /// against a per-reserve liquidation threshold. MarginFi has no equivalent
     /// figure, so its ratio is maintenance-weighted liabilities over
     /// maintenance-weighted assets, liquidatable at 1.0. Both land in one
-    /// column, and the dollar amounts printed beside them are unweighted in
-    /// both cases. Without a label the MarginFi line invites an operator to
+    /// column, and in neither case do the dollar amounts beside them share the
+    /// ratio's basis: Kamino prints its plain position values, MarginFi the
+    /// health cache's initial-weight pair. Without a label the MarginFi line invites an operator to
     /// divide $5,000 by $10,000, get 50%, and read the 75% next to it as a bug.
     /// The percentage is correct on its own basis; the column now says which.
     pub fn ltv_basis_prefix(self) -> &'static str {
@@ -417,8 +418,11 @@ pub fn classify_position(position: &Position, cfg: &Config) -> Risk {
     // position with a liquidation LTV of zero, since no line exists to report,
     // and reading that as an unmeasurable basis would label the safest possible
     // position UNKNOWN. Found on a live wallet: a deposit-only position rendered
-    // as "LTV 0.0% of 0.0% liq" under UNKNOWN.
-    if position.borrow_usd <= 0.0 {
+    // as "LTV 0.0% of 0.0% liq" under UNKNOWN. The zero has to be a measured
+    // one: when the borrow figure was unreadable the substituted 0.0 says
+    // nothing about the debt, so the row falls through to whatever basis was
+    // read, and to UNKNOWN when none was.
+    if position.borrow_measured && position.borrow_usd <= 0.0 {
         return Risk::Ok;
     }
     match position.liquidation {
@@ -447,6 +451,13 @@ pub struct Position {
     pub account: String,
     pub deposit_usd: f64,
     pub borrow_usd: f64,
+    /// `false` when the source carried no readable borrow figure and `0.0` was
+    /// substituted for it. The substitute must never reach a verdict: a zero
+    /// nobody measured is not the same fact as a measured zero, and treating it
+    /// as one reports a position sitting at its liquidation line as the safest
+    /// state there is. Every path that reads `no debt` out of `borrow_usd`
+    /// checks this first.
+    pub borrow_measured: bool,
     /// `None` when the source carried no usable basis, e.g. a MarginFi health
     /// cache with a zeroed maintenance pair. The report then states no
     /// liquidation distance at all.
@@ -615,8 +626,9 @@ fn render_within(positions: &[Position], cfg: &Config, cap: usize) -> String {
         // A deposit-only position has no ratio worth printing: the protocol
         // reports both its LTV and its liquidation line as zero, and
         // "LTV 0.0% of 0.0% liq" reads as a broken measurement rather than as
-        // the safest state a position can be in.
-        let distance = if p.borrow_usd <= 0.0 {
+        // the safest state a position can be in. An unreadable borrow figure
+        // does not earn that line; it prints whatever basis was read.
+        let distance = if p.borrow_measured && p.borrow_usd <= 0.0 {
             "no debt".to_string()
         } else {
             match p.liquidation {
