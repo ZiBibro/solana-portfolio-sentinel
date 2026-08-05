@@ -42,8 +42,13 @@ five to ten points between LTV and liquidation threshold and long-tail assets te
 to twenty. The report lists one line per position, worst risk first, and the
 whole thing is capped near 200 tokens so a recurring briefing never floods the
 agent context. Positions that the Kamino indexer has not refreshed against the
-current price feed carry a staleness hint, so an old snapshot is never presented
-as live.
+current price feed carry a staleness hint, so an old snapshot is not presented
+as live. Two limits on that marker, because a marker you trust needs its edges
+named: it stays silent below a six-hour skew, and it is derived from two
+timestamps in the Kamino response, so a reply that stops carrying either of them
+renders exactly like a fresh one. The MarginFi path has no equivalent marker at
+all; its figures come from a health cache the program writes on its own schedule
+and the account carries no age this reader surfaces.
 
 `UNKNOWN` covers the case where the source gave the tool nothing to measure
 against. MarginFi's risk engine zeroes the maintenance pair in its health cache
