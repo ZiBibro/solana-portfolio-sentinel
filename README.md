@@ -14,7 +14,7 @@ byte-exact transaction goldens. Drop `--no-wasm` and it also builds the three
 components and prints their byte sizes with a sha256 prefix. Every number comes
 out of that run; nothing in the output is typed by hand. A run on 5 August 2026
 printed 216 tests passed, 57 of them on refusal and unknown paths, and three
-components at 396225, 353372 and 378000 bytes.
+components at 396310, 354380 and 378000 bytes.
 
 216 tests and no wasm toolchain needed for the `--no-wasm` path. The tests
 themselves reach no network; cargo still fetches the pinned dependencies once.
@@ -216,7 +216,7 @@ Structural, written into the components, in four parts:
   silent default, so a typo like `max_amout` cannot quietly restore a wider
   limit.
 - **Bounded output.** Tool arguments reject unknown fields, and both the report
-  and the failure paths share one character cap. Text an outside party controls,
+  and the failure paths share one 900-character cap. Text an outside party controls,
   such as a Kamino product tag or the `message` field of a JSON-RPC error, is
   treated as untrusted input to the model: it is presented as an explicit
   quotation, stripped of control characters, narrowed in character class where
@@ -248,6 +248,14 @@ zeroclaw plugin install .
 
 The `.wasm` must sit beside `manifest.toml` when the installer runs, which is
 why it is copied up from `target/`. Built artifacts are not committed here.
+
+**Match the host to the pin, or the install will succeed and the first tool call
+will not.** A component is bound to the WIT contract of the host that runs it,
+and that contract moved: against `v0.8.4` or current `master` these components
+fail to instantiate with `expected enum of 38 names, found 37`. Either build the
+host at the commit [`REPRODUCE.md`](REPRODUCE.md) pins, or copy that host's
+`wit/v0` into this tree and rebuild, which takes no source change.
+[`REPRODUCE.md`](REPRODUCE.md) carries both paths.
 
 Running `plugin install` a second time is refused, never silently ignored:
 

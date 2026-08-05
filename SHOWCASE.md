@@ -8,8 +8,9 @@ from a bare machine.
 
 ## Where to look first
 
-Three minutes of reading, in the order that answers the questions a reviewer
-actually has. [The job](#the-job) says what it does and who carries the problem.
+About ten minutes of reading, in the order that answers the questions a reviewer
+actually has. The first two sections carry the claim; the rest is the evidence
+behind it. [The job](#the-job) says what it does and who carries the problem.
 [What a run looks like](#what-a-run-looks-like) prints the tool output verbatim,
 so the claims can be checked against bytes. [Custody tier](#custody-tier) and
 [Threat model](#threat-model) state what it holds and what it refuses to hold.
@@ -343,6 +344,31 @@ the chat channel fails from both ends: the reply-intent precheck cuts the
 procedure name, and without the name the model does not call `sop_execute` at
 all. The SOP checkpoint has no channel delivery either, so approvals live in the
 CLI and the admin API. The runbook says so where it matters.
+
+## What I would build next
+
+Four things, in the order I would take them.
+
+**A `nonce-manage` companion.** Creating a durable nonce account is a one-off
+setup step and the Solana CLI does it fine. What a companion adds is the rest of
+the lifecycle an approval queue eventually needs: rotating an authority, retiring
+an account, and keeping one nonce per pending transaction, since a single account
+serializes to a single in-flight transaction.
+
+**A cadence that answers the gap named under [Honest limits](#honest-limits).**
+A thirty-minute schedule that speaks only when a buffer narrows is a config
+change rather than new code, and it is what I would ship first if this ran for
+someone other than me.
+
+**Position history.** Every report here is a snapshot on purpose: a run reads
+what the chain says at that moment and holds no state, which is what keeps it
+reproducible and keeps the components free of storage permissions. Trend is a
+real second question, and the honest way to answer it is a companion that owns a
+datastore and reads these reports rather than a flag on these ones.
+
+**A third protocol, and only then a shared position model.** MarginFi and Kamino
+share almost nothing structurally, so the abstraction that fits both is guesswork
+until a third case says what is actually common.
 
 ## Reproduce it
 

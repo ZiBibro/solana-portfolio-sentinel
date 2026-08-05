@@ -18,6 +18,26 @@ const ISSUES_CHAR_BUDGET: usize = REPORT_CHAR_CAP / 4;
 /// Room kept for the closing line of a truncated report.
 const OMISSION_LINE_RESERVE: usize = 40;
 
+/// Bounds an error string to [`REPORT_CHAR_CAP`] before it is handed back to the
+/// agent.
+///
+/// The report path has been capped since the beginning; the failure path was
+/// not, and several failure messages interpolate a value the model chose. A call
+/// carrying a multi-kilobyte `wallet` argument got that argument back in full,
+/// so the bound the threat model claims held on one path and not the other.
+/// Truncation is on a character boundary, because the interpolated value can
+/// carry multi-byte text and a byte-sliced string is not a string.
+pub fn cap_failure(message: String) -> String {
+    if message.chars().count() <= REPORT_CHAR_CAP {
+        return message;
+    }
+    const MARKER: &str = "… (truncated)";
+    let keep = REPORT_CHAR_CAP.saturating_sub(MARKER.chars().count());
+    let mut out: String = message.chars().take(keep).collect();
+    out.push_str(MARKER);
+    out
+}
+
 /// Room kept for the `(+N more)` marker of a trimmed data-issues line.
 const OMISSION_MARKER_RESERVE: usize = 16;
 
