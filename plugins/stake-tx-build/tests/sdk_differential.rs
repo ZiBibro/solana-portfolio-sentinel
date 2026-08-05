@@ -178,7 +178,11 @@ fn meaning_of(bytes: &[u8]) -> Meaning {
     }
 }
 
-fn ours(authority: [u8; 32], ixs: &[stake_tx_build::txbuild::Instruction], hash: [u8; 32]) -> Meaning {
+fn ours(
+    authority: [u8; 32],
+    ixs: &[stake_tx_build::txbuild::Instruction],
+    hash: [u8; 32],
+) -> Meaning {
     let msg = compile_message(authority, ixs, hash).expect("our encoder compiled the message");
     meaning_of(&serialize_message(&msg))
 }
