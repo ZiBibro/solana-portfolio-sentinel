@@ -289,10 +289,16 @@ fn vote_status_prefers_bps_field() {
             last_vote_slot: Some(433_721_727),
         }
     );
+}
 
-    // Neither commission field present. A default of 0 bps used to render
-    // `fee 0.0%`, the most favourable reading available, on the same screen as
-    // genuine zero-fee validators. It has to say it does not know.
+/// A reply carrying neither `inflationRewardsCommissionBps` nor a numeric
+/// `commission` used to default to 0 bps and render `fee 0.0%`, the most
+/// favourable reading available, on the same screen as genuine zero-fee
+/// validators. The published payload carries such a row, so the two collided.
+/// An unread commission has to say it is unread, the way `lastVote` already
+/// does.
+#[test]
+fn an_unread_commission_says_so_rather_than_printing_zero() {
     let no_commission = format!(
         r#"{{"jsonrpc":"2.0","result":{{"current":[{{"votePubkey":"{VOTER}","activatedStake":1,"epochCredits":[],"lastVote":433721727}}],"delinquent":[]}},"id":1}}"#
     );
@@ -311,6 +317,30 @@ fn vote_status_prefers_bps_field() {
     let report = render_report(&[entry], &parse_epoch_info(EPOCH_INFO).unwrap(), &cfg());
     assert!(report.contains("fee unknown"), "report: {report}");
     assert!(!report.contains("fee 0.0%"), "report: {report}");
+}
+
+/// The delegated total sums endpoint-supplied lamport values, and the release
+/// profile turns overflow checks off, so a wrapped sum would print a small
+/// confident number for an absurd reply. It saturates instead.
+#[test]
+fn the_delegated_total_saturates_rather_than_wrapping() {
+    // Two halves of 2^64: wrapping lands on exactly 0, saturating on u64::MAX,
+    // so the two outcomes are far apart rather than a rounding apart.
+    let half = 1u64 << 63;
+    let report = render_report(
+        &[entry_with_stake("a", half), entry_with_stake("b", half)],
+        &parse_epoch_info(EPOCH_INFO).unwrap(),
+        &cfg(),
+    );
+    let header = report.lines().next().expect("a header");
+    assert!(
+        !header.contains("0 SOL delegated"),
+        "a wrapped sum reports the stake as gone: {header}"
+    );
+    assert!(
+        header.contains("18446744074 SOL delegated"),
+        "header: {header}"
+    );
 }
 
 #[test]
@@ -469,6 +499,16 @@ fn entry_with_reward(
         validator: Some(validator),
         reward,
     }
+}
+
+/// An active row carrying a caller-chosen stake, for the overflow check.
+fn entry_with_stake(label: &str, stake_lamports: u64) -> Entry {
+    let mut e = entry("main", StakeStatus::Active, healthy_validator());
+    e.label = label.to_string();
+    if let Some(d) = e.state.delegation.as_mut() {
+        d.stake_lamports = stake_lamports;
+    }
+    e
 }
 
 fn healthy_validator() -> ValidatorStatus {
@@ -672,10 +712,12 @@ fn report_stays_under_char_cap() {
         REPORT_CHAR_CAP
     );
     assert!(report.contains("omitted"), "report: {report}");
+}
 
-    // The same bound has to hold on the failure path, which interpolates a
-    // value the caller chose. Before this, a multi-kilobyte argument came back
-    // in full inside the error string the agent reads.
+/// The failure path carries the same 900-character bound as the report, for the
+/// same reason: its messages interpolate a value the caller chose.
+#[test]
+fn the_failure_path_shares_the_report_char_cap() {
     let hostile = "\u{043f}".repeat(8_000);
     let capped = cap_failure(format!("stake account `{hostile}` is not configured"));
     assert!(

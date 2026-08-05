@@ -205,6 +205,29 @@ fn short_account_is_skipped() {
     assert!(decode_account(&short, "pubkey", "main").is_none());
 }
 
+/// The request carries a dataSize filter and two memcmp filters, and the decoder
+/// used to trust the endpoint to have honoured them. A caching proxy that drops
+/// a filter, or a provider answering a different query, would then get any
+/// 2312-byte account decoded and reported under the operator's wallet label. The
+/// discriminator is in the first eight bytes already in hand, so it is re-checked
+/// here. This does not defend against an endpoint that lies, which could forge
+/// the field; the allowlist guarantee lives at request construction.
+#[test]
+fn an_account_that_is_not_a_marginfi_account_is_not_decoded() {
+    let real = account_bytes(GPA_MAINT_SYNTHETIC);
+    assert!(
+        decode_account(&real, "pubkey", "main").is_some(),
+        "the fixture itself must still decode"
+    );
+
+    let mut foreign = real.clone();
+    foreign[0] ^= 0xff;
+    assert!(
+        decode_account(&foreign, "pubkey", "main").is_none(),
+        "a wrong discriminator must not be decoded as a MarginfiAccount"
+    );
+}
+
 #[test]
 fn unhealthy_flag_keeps_the_measured_ratio_and_condemns_the_line() {
     // Clear the HEALTHY bit on the maintenance-weighted account, leaving the

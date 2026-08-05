@@ -278,14 +278,14 @@ many of the tests sit on refusal and unknown paths:
 bash demo/run-demo.sh --no-wasm
 ```
 
-Measured on this checkout, 2026-08-05:
+Measured on this checkout, 2026-08-06:
 
 | crate | tests passing |
 |---|---|
-| `lending-health` | 83 |
-| `stake-monitor` | 47 |
+| `lending-health` | 88 |
+| `stake-monitor` | 50 |
 | `stake-tx-build` | 86 |
-| total | **216** |
+| total | **224** |
 
 These match the README. If your run reports something else, the checkout moved:
 measure yours and trust that. The registry pull request carries the counts of the
@@ -1462,7 +1462,7 @@ of tool time rather than as a figure with three significant digits.
 | Distance from pinned commit to `origin/master` | 204 commits (`cc92c86`) | fetched 2026-08-01 |
 | Host release build from `cc92c86`, wall clock | 21 min 37 s | 2026-08-01 |
 | One plugin release build, cold `target/` | 44.81 s (`stake-monitor`) | 2026-08-01 |
-| Host tests across the three crates | 216 passing | 2026-08-05 |
+| Host tests across the three crates | 224 passing | 2026-08-06 |
 | `exec_tool` example build, warm host target | 4.41 s | 2026-08-01 |
 | lending-health response, 2 wallets / 6 positions | 1792 ms | 2026-07-29 |
 | lending-health response, 20 wallets / 50 positions | 2523 ms | 2026-07-29 |

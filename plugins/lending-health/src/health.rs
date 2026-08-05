@@ -276,10 +276,13 @@ fn parse_wallets(raw: &str) -> Result<Vec<Wallet>, String> {
 /// it removes, these it does not.
 fn reject_invisible(value: &str, what: &str) -> Result<(), String> {
     for (i, ch) in value.char_indices() {
+        // U+2028 and U+2029 are Zl and Zp rather than Cc, so `is_control` misses
+        // them, and they break a line in most renderers.
         let invisible = ch.is_control()
             || matches!(
                 ch,
-                '\u{00ad}' | '\u{200b}'..='\u{200f}' | '\u{2060}' | '\u{feff}'
+                '\u{00ad}' | '\u{200b}'
+                    ..='\u{200f}' | '\u{2028}' | '\u{2029}' | '\u{2060}' | '\u{feff}'
             );
         if invisible {
             return Err(format!(

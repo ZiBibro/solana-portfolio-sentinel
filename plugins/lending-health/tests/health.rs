@@ -427,10 +427,15 @@ fn report_stays_under_char_cap() {
         REPORT_CHAR_CAP
     );
     assert!(report.contains("omitted"), "report: {report}");
+}
 
-    // The same bound has to hold on the failure path, which interpolates a
-    // value the caller chose. Before this, a multi-kilobyte `wallet` argument
-    // came back in full inside the error string the agent reads.
+/// The report path has carried the 900-character bound from the start. The
+/// failure path did not, and several failure messages interpolate a value the
+/// caller chose, so a call with a multi-kilobyte `wallet` argument got that
+/// argument back in full inside the error string the agent reads. Both public
+/// documents state the bound covers the failure path, so the code has to.
+#[test]
+fn the_failure_path_shares_the_report_char_cap() {
     let hostile = "\u{043f}".repeat(8_000);
     let capped = cap_failure(format!(
         "wallet `{hostile}` is not in the configured allowlist"
@@ -447,6 +452,27 @@ fn report_stays_under_char_cap() {
     // A message already inside the bound is handed through untouched.
     let short = "wallet `main` is not in the configured allowlist".to_string();
     assert_eq!(cap_failure(short.clone()), short);
+}
+
+/// U+2028 and U+2029 are Zl and Zp, so `char::is_control` does not see them,
+/// and both break a line in most renderers. The report is line-structured, so a
+/// label carrying one would let a refusal forge a row.
+#[test]
+fn a_line_separator_in_a_label_is_refused_as_invisible() {
+    let cfg = Config::from_section(&base_section()).unwrap();
+    for sep in ['\u{2028}', '\u{2029}'] {
+        // Interior, because both are White_Space and `trim` already removes a
+        // trailing one, which resolves to the right wallet and forges nothing.
+        let smuggled = format!("ma{sep}in");
+        let err = cfg
+            .resolve_wallet(Some(&smuggled))
+            .expect_err("a line separator must be refused");
+        assert!(
+            err.contains("invisible character"),
+            "sep U+{:04X} slipped through: {err}",
+            sep as u32
+        );
+    }
 }
 
 #[test]

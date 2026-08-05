@@ -103,6 +103,11 @@ struct Meaning {
     fee_payer: [u8; 32],
     blockhash: [u8; 32],
     accounts: BTreeSet<Account>,
+    /// Length of the message key table. The set above carries no cardinality, so
+    /// without this a key repeated in the table with the same flags compares
+    /// equal to the same table without the repeat. Confirmed by mutation: with
+    /// the set alone, duplicating a trailing key left all five tests green.
+    key_count: usize,
     calls: Vec<Call>,
 }
 
@@ -185,6 +190,7 @@ fn meaning_of(bytes: &[u8]) -> Meaning {
         fee_payer: keys[0],
         blockhash,
         accounts,
+        key_count: keys.len(),
         calls,
     }
 }

@@ -841,7 +841,11 @@ fn render_within(entries: &[Entry], epoch: &EpochInfo, cfg: &Config, budget: usi
             )
         })
         .map(|e| e.state.delegation.as_ref().map_or(0, |d| d.stake_lamports))
-        .sum();
+        // Saturating, because the lamport values come from the endpoint and the
+        // release profile turns overflow checks off, so a wrapped sum would
+        // print a small confident number for an absurd input. The neighbouring
+        // epoch percentage already widens to u128 against the same threat.
+        .fold(0u64, u64::saturating_add);
     let delinquent = entries
         .iter()
         .filter(|e| matches!(e.validator, Some(ValidatorStatus::Delinquent { .. })))
