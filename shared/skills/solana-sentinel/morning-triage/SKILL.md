@@ -39,8 +39,9 @@ plainly. Do not guess a verdict from the figures that did parse, and do not
 smooth it over with a reassuring sentence.
 
 A line prefixed `maint LTV` is measured on MarginFi's maintenance-weighted
-basis. Its dollar figures are unweighted. Both are correct, and they will not
-divide into each other. Say so if the operator does the division and asks.
+basis, while its dollar figures come from the program's initial-weight pair.
+Both are correct, and they will not divide into each other. Say so if the
+operator does the division and asks.
 
 ## Read the stake numbers correctly
 

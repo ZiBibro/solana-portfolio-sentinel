@@ -1,4 +1,4 @@
-﻿# REPRODUCE: standing up the Solana portfolio sentinel from nothing
+# REPRODUCE: standing up the Solana portfolio sentinel from nothing
 
 This is the operator runbook for the use case shown in the demo: a ZeroClaw agent
 living in a Telegram channel that reads a Solana lending position, reads the
@@ -99,7 +99,7 @@ zeroclaw 0.8.3
 **The pin is load-bearing, and we can now say exactly why.** The plugin WIT
 contract in `wit/v0` carries no `.frozen` marker, so the interface is allowed to
 move under you, and it has. On 2026-08-01 we built the host from `origin/master`
-at `cc92c86`, 99 commits past the pin, and pointed it at the same three
+at `cc92c86`, 204 commits past the pin, and pointed it at the same three
 components this repository ships. They do not load at all:
 
 ```
@@ -264,7 +264,7 @@ many of the tests sit on refusal and unknown paths:
 bash demo/run-demo.sh --no-wasm
 ```
 
-Measured on this checkout, 2026-08-02:
+Measured on this checkout, 2026-08-05:
 
 | crate | tests passing |
 |---|---|
@@ -273,8 +273,9 @@ Measured on this checkout, 2026-08-02:
 | `stake-tx-build` | 86 |
 | total | **216** |
 
-These match the README and the pull-request body. If your run reports something
-else, the checkout moved: measure yours and trust that.
+These match the README. If your run reports something else, the checkout moved:
+measure yours and trust that. The registry pull request carries the counts of the
+commit it was last pushed at, which is behind this repository.
 
 ---
 
@@ -842,7 +843,10 @@ letters, digits, and single underscores are allowed (no hyphen, no uppercase)
 `config list` and `config get` read the same job without complaint, so the block
 is valid; the write path alone disagrees. Change `expr` in `config.toml` and
 restart the daemon, which resyncs `jobs.db` from the file on startup. Filed
-upstream as Finding 8 in our findings write-up.
+upstream as
+[zeroclaw#9652](https://github.com/zeroclaw-labs/zeroclaw/issues/9652), closed as
+completed on 5 August 2026 by
+[PR #9705](https://github.com/zeroclaw-labs/zeroclaw/pull/9705).
 
 The resync itself is worth watching. We have seen a config edit clear a job's run
 history once, on 2026-08-01, after which `cron list` reported `last=never` for a
@@ -854,6 +858,16 @@ after any config change, and read the trace when you need the run of record.
 
 Skills are plain Markdown with frontmatter. They carry the reading procedure so
 it lives outside the model's improvisation and outside the plugin's Rust.
+
+**Copy the tree first.** The host resolves both `skill_bundles` and `sops_dir`
+against its install root, which is the directory holding `config.toml`. The
+files ship in the plugin repository, so they have to be put there before
+anything below finds them. `<install>` in this section means that directory, the
+one this runbook calls `$ZC_HOME`:
+
+```bash
+cp -r shared "$ZC_HOME/"
+```
 
 ```
 <install>/shared/skills/solana-sentinel/morning-triage/SKILL.md
@@ -1181,7 +1195,7 @@ about in section 5; the variable name is what causes it here.
 
 The working directory matters: a relative `sops_dir` resolves against it, so a
 task without `-WorkingDirectory` loads zero SOPs and says nothing about it. That
-is trap 2 arriving through a different door.
+is the section 7.4 working-directory trap arriving through a different door.
 
 **Linux, as a user service.** `~/.config/systemd/user/zeroclaw.service`:
 
@@ -1425,7 +1439,7 @@ of tool time rather than as a figure with three significant digits.
 | Host binary size | 38.7 MB | 2026-07-18 |
 | Host `target/` size after build | 3.3 GB | 2026-08-01 |
 | Distance from pinned commit to `origin/master` | 30 commits | fetched 2026-07-28 |
-| Distance from pinned commit to `origin/master` | 99 commits (`cc92c86`) | fetched 2026-08-01 |
+| Distance from pinned commit to `origin/master` | 204 commits (`cc92c86`) | fetched 2026-08-01 |
 | Host release build from `cc92c86`, wall clock | 21 min 37 s | 2026-08-01 |
 | One plugin release build, cold `target/` | 44.81 s (`stake-monitor`) | 2026-08-01 |
 | Host tests across the three crates | 216 passing | 2026-08-05 |

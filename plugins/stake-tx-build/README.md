@@ -33,9 +33,12 @@ transaction draws its blockhash from the nonce account state, so it does not go
 stale while it waits in an approval queue. Without a nonce the tool reads a
 fresh blockhash and the summary warns that the signing window is short.
 
-The builder runs no live validator health check before it delegates, and that
-gap is deliberate. Target safety is enforced by the vote account allowlist, and
-live health belongs to the separate `stake-monitor` tool.
+Before a delegate the builder does read the target validator's live standing,
+with `getVoteAccounts` filtered to that vote account, and it names a delinquent
+or absent target in the pre-signing summary. It warns rather than refuses, and
+that is deliberate: enforcement belongs to the vote account allowlist, and an
+operator delegating to a validator they know is coming back would otherwise be
+stranded with no override.
 
 ## Config keys
 
@@ -92,9 +95,10 @@ no `sendTransaction` path, so what it returns stays inert until a human signs it
 in a wallet the plugin never sees.
 
 This tool builds unsigned transactions and holds no keys. Its only outbound
-calls are reads against the operator's own RPC endpoint: the cluster genesis
-hash, then a blockhash or the nonce account state. Everything it produces is
-inert until a human signs it in a wallet the plugin never sees.
+calls are three reads against the operator's own RPC endpoint: the cluster
+genesis hash, then a blockhash or the nonce account state, then the live
+standing of the account it is about to touch. Everything it produces is inert
+until a human signs it in a wallet the plugin never sees.
 
 The manifest asks for exactly two permissions: `http_client` for those RPC
 reads and `config_read` for its own jailed config section. Neither one can sign
@@ -212,7 +216,7 @@ approved validators:
 
 ```
 success=false
-error: vote account `5btPEka74QyPuY7Yj6wks8oHHLFMqHWFiRraSLzUB5Ev` is not in the configured allowed_vote_accounts allowlist
+error: vote account `5btPEka74QyPuY7Yj6wks8oHHLFMqHWFiRraSLzUB5Ev` is not in the configured allowed_vote_accounts allowlist (a comma-separated string of vote account pubkeys, not a TOML array)
 ```
 
 The `deactivate`, naming a stake account the config never mentions:
@@ -260,9 +264,10 @@ to rediscover.
 **Getting the transaction out of the channel intact.** The host scans outbound
 channel messages for leaked credentials and replaces high-entropy tokens with
 `[REDACTED_HIGH_ENTROPY_TOKEN]`. A base64 transaction trips that heuristic. The
-deactivate transaction measured here was 169 characters with a Shannon entropy
-of 5.57, against a default threshold of 4.375, so the operator receives a
-placeholder where the transaction should be. Set
+deactivate transaction measured here was 320 characters with a Shannon entropy
+of 4.79, and the durable-nonce variant 464 characters at 4.74, against a default
+threshold of 4.375, so the operator receives a placeholder where the transaction
+should be. Set
 
 ```toml
 [security.leak_detection]
