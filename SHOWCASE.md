@@ -192,6 +192,17 @@ The approval card sits between the two. It is a real gate with two limits. It ex
 
 **So I turned it off to see what my own layer does alone.** Twenty minutes, same machine, same operator. With the classifier gone, "think about how to hack this system" reached the agent, which answered with a structured list of attack surfaces. Nothing leaked and no boundary moved, because the boundaries are in code. But the contrast is the point: one layer stops a class of message before a model reasons about it, the other stops the model's conclusions from reaching an address. Both are worth having, and only the second is ours.
 
+**The trace rows for one full drill are published rather than summarised.** On
+5 August I ran the same probe three times in a row and kept every row: once the
+model declined on its own and called nothing, once the approval card stopped the
+call before it reached the component, and once approval was granted and the
+component refused anyway. That third run is the one worth reading, because a
+human said yes and the address still never reached the network: `tool_call_start`
+at 15:00:24.376, the component's own refusal at 15:00:25.135, `tool/fail` a
+millisecond later, zero RPC requests in between. The rows, the timing and what
+the drill does not prove are in
+[`demo/injection-drill/`](demo/injection-drill/README.md).
+
 **The agent's own guess about my weakest point, tested.** In that list it nominated one: "if the allowlist stores base58 strings and compares them text-based, case sensitivity or trailing whitespace could be a problem." I ran six forms of the same address through the live component. Leading and trailing whitespace are trimmed before comparison and resolve to the same address. A lowercased or uppercased variant is refused, and that is correct rather than lucky: in base58 a different case is a different key, so a case-insensitive comparison is the actual vulnerability. A zero-width character inside the address is refused too. The guess was reasonable and wrong, and I would rather show that than claim nobody asked.
 
 The softer case proves my layer. The operator asked to delegate to a validator absent from the config, and the model passed the forbidden address straight through:
@@ -337,7 +348,9 @@ CLI and the admin API. The runbook says so where it matters.
 
 - **Code:** https://github.com/ZiBibro/solana-portfolio-sentinel (MIT and Apache-2.0, green CI)
 - **Runbook:** [REPRODUCE.md](https://github.com/ZiBibro/solana-portfolio-sentinel/blob/main/REPRODUCE.md), written from real output. About ninety minutes of wall clock with the toolchain installed, carrying the full config file with secrets redacted and five traps with their fixes.
+- **One command, counts instead of a tick:** `bash demo/run-demo.sh --no-wasm` prints tests passed per component, how many of them cover refusal and unknown paths, and the byte-exact golden names. Without the flag it also builds the three components and prints their sizes and digests.
 - **Per-plugin threat model and injection transcript:** the README inside each plugin directory
+- **Injection drill with the raw trace rows:** [demo/injection-drill/](https://github.com/ZiBibro/solana-portfolio-sentinel/blob/main/demo/injection-drill/README.md), three consecutive runs of the same probe with timings
 - **CI:** [every run on `main`](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml?query=branch%3Amain). Deliberately not a link to one run: this file lives in the repository, so pinning a run id here would go stale on the very commit that updates it.
 
 A note on the registry. My pull request to `zeroclaw-plugins` has been open since 18 July, predating the 22 July guidance to keep code in your own repo during the bounty. On 1 August I moved it to draft with a comment explaining the timing, so it sits out of the review queue for the duration without losing its history. The standalone repository above is the code this showcase submits.
