@@ -30,9 +30,18 @@ rule
 # ---------------------------------------------------------------- host tests
 echo "host tests (captured fixtures, no network)"
 total_passed=0
-declare -A passed_by_plugin
+# Parallel indexed arrays rather than an associative one: macOS ships bash 3.2,
+# where `declare -A` does not exist, and this script is the first thing a
+# reviewer runs.
+passed_by_plugin=()
 for p in "${PLUGINS[@]}"; do
-  out="$(cargo test --locked --quiet --manifest-path "plugins/$p/Cargo.toml" 2>&1)"
+  # Capture the status too. A compile error or a failing test exits non-zero,
+  # and letting `set -e` kill the assignment would discard every word of why.
+  if ! out="$(cargo test --locked --quiet --manifest-path "plugins/$p/Cargo.toml" 2>&1)"; then
+    printf '%s\n' "$out"
+    echo "FAILED: cargo test did not succeed for $p"
+    exit 1
+  fi
   # Every test binary prints one "test result:" line; sum the passed counts.
   n="$(printf '%s\n' "$out" | awk '/^test result:/ { for (i=1;i<=NF;i++) if ($i=="passed;") s+=$(i-1) } END { print s+0 }')"
   failed="$(printf '%s\n' "$out" | awk '/^test result:/ { for (i=1;i<=NF;i++) if ($i=="failed;") s+=$(i-1) } END { print s+0 }')"
@@ -41,7 +50,7 @@ for p in "${PLUGINS[@]}"; do
     echo "FAILED: $p reported $failed failing test(s)"
     exit 1
   fi
-  passed_by_plugin["$p"]="$n"
+  passed_by_plugin+=("$n")
   total_passed=$(( total_passed + n ))
   row "$p" "$n passed"
 done
@@ -55,11 +64,13 @@ PATTERN='reject|refus|denie|denied|unknown|outside|not_allow|non_allowlisted|can
 echo "refusal and unknown-path coverage"
 echo "  name filter: /${PATTERN}/"
 refusal_total=0
+i=0
 for p in "${PLUGINS[@]}"; do
   listing="$(cargo test --locked --quiet --manifest-path "plugins/$p/Cargo.toml" -- --list 2>/dev/null || true)"
   n="$(printf '%s\n' "$listing" | grep -E ': test$' | grep -Ec "$PATTERN" || true)"
   refusal_total=$(( refusal_total + n ))
-  row "$p" "$n of ${passed_by_plugin[$p]}"
+  row "$p" "$n of ${passed_by_plugin[$i]}"
+  i=$(( i + 1 ))
 done
 row "total" "$refusal_total of $total_passed"
 rule
