@@ -5,8 +5,9 @@
 # output of `cargo test`, the refusal count comes from its `--list` output, and
 # the component sizes and digests come from the files the build just produced.
 #
-# No network, no keys, no wallet. Host tests read captured fixtures; the wasm
-# build is offline. Expect two to three minutes on a cold cargo cache.
+# No keys and no wallet. No test reaches the network; cargo fetches the pinned
+# crates once on a cold cache, and nothing else here goes out. Expect two to
+# three minutes on that first run.
 #
 #   bash demo/run-demo.sh            full run
 #   bash demo/run-demo.sh --no-wasm  skip the component build
@@ -110,6 +111,7 @@ if [[ "$BUILD_WASM" == "1" ]]; then
 fi
 
 echo "what this run did not do"
-echo "  no network call, no key material read, no transaction signed or sent."
+echo "  no key material read, no transaction signed or sent, and no network"
+echo "  call from any test. cargo fetches the pinned crates once on a cold cache."
 echo "  the numbers above describe this checkout only; REPRODUCE.md pins the host"
 echo "  commit these components were compiled against."

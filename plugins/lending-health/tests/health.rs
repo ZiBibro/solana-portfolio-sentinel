@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use lending_health::health::{
-    classify, classify_position, liquidation_buffer, render_payload, render_report,
+    cap_failure, classify, classify_position, liquidation_buffer, render_payload, render_report,
     render_total_failure, short_account, validate_pubkey, Config, Liquidation, Position, Protocol,
     Risk, REPORT_CHAR_CAP,
 };
@@ -427,6 +427,26 @@ fn report_stays_under_char_cap() {
         REPORT_CHAR_CAP
     );
     assert!(report.contains("omitted"), "report: {report}");
+
+    // The same bound has to hold on the failure path, which interpolates a
+    // value the caller chose. Before this, a multi-kilobyte `wallet` argument
+    // came back in full inside the error string the agent reads.
+    let hostile = "\u{043f}".repeat(8_000);
+    let capped = cap_failure(format!(
+        "wallet `{hostile}` is not in the configured allowlist"
+    ));
+    assert!(
+        capped.chars().count() <= REPORT_CHAR_CAP,
+        "capped failure is {} chars, cap is {}",
+        capped.chars().count(),
+        REPORT_CHAR_CAP
+    );
+    assert!(capped.ends_with("… (truncated)"), "capped: {capped}");
+    // Multi-byte input must survive as text rather than as a sliced byte run.
+    assert!(capped.starts_with("wallet `"), "capped: {capped}");
+    // A message already inside the bound is handed through untouched.
+    let short = "wallet `main` is not in the configured allowlist".to_string();
+    assert_eq!(cap_failure(short.clone()), short);
 }
 
 #[test]

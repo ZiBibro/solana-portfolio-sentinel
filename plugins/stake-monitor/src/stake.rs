@@ -25,6 +25,26 @@ pub const REPORT_CHAR_CAP: usize = 900;
 /// failed reads still leaves two thirds of the payload to them.
 const ISSUE_CHAR_BUDGET: usize = REPORT_CHAR_CAP / 3;
 
+/// Bounds an error string to [`REPORT_CHAR_CAP`] before it is handed back to the
+/// agent.
+///
+/// The report path has been capped since the beginning; the failure path was
+/// not, and several failure messages interpolate a value the model chose. A call
+/// carrying a multi-kilobyte argument got that argument back in full, so the
+/// bound the threat model claims held on one path and not the other. Truncation
+/// is on a character boundary, because the interpolated value can carry
+/// multi-byte text and a byte-sliced string is not a string.
+pub fn cap_failure(message: String) -> String {
+    if message.chars().count() <= REPORT_CHAR_CAP {
+        return message;
+    }
+    const MARKER: &str = "… (truncated)";
+    let keep = REPORT_CHAR_CAP.saturating_sub(MARKER.chars().count());
+    let mut out: String = message.chars().take(keep).collect();
+    out.push_str(MARKER);
+    out
+}
+
 const ISSUE_PREFIX: &str = "\nData issues: ";
 
 const ISSUE_SEPARATOR: &str = "; ";
@@ -485,11 +505,15 @@ pub fn parse_stake_account(body: &str) -> Result<StakeState, String> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValidatorStatus {
     Ok {
-        commission_bps: u64,
+        /// `None` when the reply carried neither `inflationRewardsCommissionBps`
+        /// nor a numeric `commission`. Rendering an unread commission as 0.0%
+        /// would put it beside genuine 0% validators with nothing to tell them
+        /// apart, and 0% is the most favourable reading available.
+        commission_bps: Option<u64>,
         last_vote_slot: Option<u64>,
     },
     Delinquent {
-        commission_bps: u64,
+        commission_bps: Option<u64>,
         last_vote_slot: Option<u64>,
     },
     Unknown,
@@ -523,6 +547,16 @@ impl ValidatorStatus {
     }
 }
 
+/// Renders a commission for a report line. An unread one says so; rendering it
+/// as `0.0%` would be indistinguishable from a genuine zero-fee validator, and
+/// the published reports carry both kinds of row side by side.
+fn fmt_commission(commission_bps: Option<u64>) -> String {
+    match commission_bps {
+        Some(bps) => format!("fee {:.1}%", bps as f64 / 100.0),
+        None => "fee unknown".to_string(),
+    }
+}
+
 /// Reads a `getVoteAccounts` reply that was filtered by `votePubkey`.
 /// Commission is taken from `inflationRewardsCommissionBps` when present,
 /// with the legacy percentage `commission` as the fallback, because the
@@ -532,17 +566,24 @@ impl ValidatorStatus {
 /// whole chain history, so it is read as unknown.
 pub fn parse_vote_status(body: &str, voter: &str) -> Result<ValidatorStatus, String> {
     let r = rpc_result(body)?;
-    let pick = |list: &str| -> Option<(u64, Option<u64>)> {
+    let pick = |list: &str| -> Option<(Option<u64>, Option<u64>)> {
         r.get(list)?
             .as_array()?
             .iter()
             .find(|v| v.get("votePubkey").and_then(Value::as_str) == Some(voter))
             .map(|v| {
+                // A commission nobody could read must not render as 0.0%, the
+                // most favourable value there is, beside genuine 0% validators
+                // in the same report. `saturating_mul` because the legacy
+                // percentage arrives from the endpoint and 100 * u64::MAX is
+                // not a commission.
                 let commission_bps = v
                     .get("inflationRewardsCommissionBps")
                     .and_then(Value::as_u64)
-                    .unwrap_or_else(|| {
-                        v.get("commission").and_then(Value::as_u64).unwrap_or(0) * 100
+                    .or_else(|| {
+                        v.get("commission")
+                            .and_then(Value::as_u64)
+                            .map(|pct| pct.saturating_mul(100))
                     });
                 let last_vote_slot = v
                     .get("lastVote")
@@ -877,9 +918,9 @@ fn render_within(entries: &[Entry], epoch: &EpochInfo, cfg: &Config, budget: usi
             let vstat = match &e.validator {
                 Some(v @ ValidatorStatus::Ok { commission_bps, .. }) => {
                     format!(
-                        "validator {voter_short}.. ok, {}, fee {:.1}%",
+                        "validator {voter_short}.. ok, {}, {}",
                         fmt_vote_lag(v, epoch, cfg.vote_lag_warn_slots),
-                        *commission_bps as f64 / 100.0
+                        fmt_commission(*commission_bps)
                     )
                 }
                 Some(v @ ValidatorStatus::Delinquent { .. }) => {

@@ -104,9 +104,11 @@ plugin refuses to run without a configured allowlist.
   silently ignored typo, which surfaces a misspelled key immediately. `rpc_url`
   must be `https://`, and both `vote_lag_warn_slots` and `timeout_secs` are
   range-bounded.
-- **Authoritative commission.** Commission is read from `commissionBps`, the
-  authoritative field. The legacy `commission` percentage can be null even when a
-  reward exists, so it is used only as a fallback.
+- **Authoritative commission.** The commission a report line prints is read
+  from `inflationRewardsCommissionBps`, the authoritative field. The legacy
+  `commission` percentage can be null even when a reward exists, so it is used
+  only as a fallback, and a reply carrying neither prints `fee unknown` rather
+  than the most favourable reading available.
 - **No invented numbers.** A degraded reply never becomes a reassuring figure. A
   vote record with no `lastVote`, or the `0` an account that has never voted
   reports, prints `vote lag unknown` rather than a lag of zero. A `getEpochInfo`

@@ -240,6 +240,10 @@ mod component {
     }
 
     fn fail(message: String) -> Result<ToolResult, String> {
+        // The same 900-character bound the report path carries. Several failure
+        // messages interpolate a value the caller supplied, so without this the
+        // failure path is the wider door into the agent's context.
+        let message = crate::health::cap_failure(message);
         emit(PluginAction::Fail, PluginOutcome::Failure, &message);
         Ok(ToolResult {
             success: false,

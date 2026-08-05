@@ -19,14 +19,19 @@
 //! ## Why this compares meaning rather than bytes
 //!
 //! The first run of this file compared serialized bytes and failed on all three
-//! cases, at byte 68, inside the key table. The cause is not in our encoder.
+//! cases, inside the key table: at byte 68 for delegate, at 69 for deactivate,
+//! and at 68 or 132 for the durable-nonce case depending on the input. The cause
+//! is not in our encoder.
 //!
 //! We keep readonly keys in order of first appearance across the instructions:
-//! `SysvarClock` (`06a7d517…`) before `StakeProgram` (`06a1d817…`).
-//! `solana-message` v2 emits them the other way round, in ascending order of the
-//! key bytes, which is what a `BTreeMap` over pubkeys gives you. Our order is the
-//! one the real mainnet delegate transaction uses, and the golden test that pins
-//! it stays green.
+//! `SysvarClock` (`06a7d517…`) before `StakeProgram` (`06a1d817…`) for the single
+//! instruction we emit. `solana-message` v2 emits them in ascending order of the
+//! key bytes instead, which is what a `BTreeMap` over pubkeys gives you. The real
+//! mainnet delegate transaction follows the same first-appearance rule we do; its
+//! own sequence differs from ours because it carries four instructions where we
+//! carry one. No test in this package pins the message key-table order in either
+//! direction, and the goldens compare through per-instruction indices, so the
+//! argument below rests on the runtime's behaviour rather than on a golden.
 //!
 //! Both orders are valid on chain: the runtime does not require any particular
 //! order inside the readonly-non-signer group, it resolves accounts through the

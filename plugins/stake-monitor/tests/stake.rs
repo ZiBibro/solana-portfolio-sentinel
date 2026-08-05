@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 use stake_monitor::stake::{
-    derive_status, parse_epoch_info, parse_inflation_rewards, parse_stake_account,
+    cap_failure, derive_status, parse_epoch_info, parse_inflation_rewards, parse_stake_account,
     parse_vote_status, render_payload, render_report, render_total_failure, vote_account_body,
     Config, Delegation, Entry, EpochProgress, Reward, StakeState, StakeStatus, ValidatorStatus,
     DEFAULT_VOTE_LAG_WARN_SLOTS, REPORT_CHAR_CAP,
@@ -168,7 +168,7 @@ fn epoch_info_degrades_without_head_slot() {
         "main",
         StakeStatus::Active,
         ValidatorStatus::Ok {
-            commission_bps: 700,
+            commission_bps: Some(700),
             last_vote_slot: Some(HEAD_SLOT - 5_000),
         },
     )];
@@ -285,10 +285,32 @@ fn vote_status_prefers_bps_field() {
     assert_eq!(
         parse_vote_status(&body, VOTER).unwrap(),
         ValidatorStatus::Ok {
-            commission_bps: 700,
+            commission_bps: Some(700),
             last_vote_slot: Some(433_721_727),
         }
     );
+
+    // Neither commission field present. A default of 0 bps used to render
+    // `fee 0.0%`, the most favourable reading available, on the same screen as
+    // genuine zero-fee validators. It has to say it does not know.
+    let no_commission = format!(
+        r#"{{"jsonrpc":"2.0","result":{{"current":[{{"votePubkey":"{VOTER}","activatedStake":1,"epochCredits":[],"lastVote":433721727}}],"delinquent":[]}},"id":1}}"#
+    );
+    assert_eq!(
+        parse_vote_status(&no_commission, VOTER).unwrap(),
+        ValidatorStatus::Ok {
+            commission_bps: None,
+            last_vote_slot: Some(433_721_727),
+        }
+    );
+    let entry = entry(
+        "main",
+        StakeStatus::Active,
+        parse_vote_status(&no_commission, VOTER).unwrap(),
+    );
+    let report = render_report(&[entry], &parse_epoch_info(EPOCH_INFO).unwrap(), &cfg());
+    assert!(report.contains("fee unknown"), "report: {report}");
+    assert!(!report.contains("fee 0.0%"), "report: {report}");
 }
 
 #[test]
@@ -299,7 +321,7 @@ fn vote_status_detects_delinquent_and_unknown() {
     assert_eq!(
         parse_vote_status(&delinquent, VOTER).unwrap(),
         ValidatorStatus::Delinquent {
-            commission_bps: 500,
+            commission_bps: Some(500),
             last_vote_slot: Some(433_719_000),
         }
     );
@@ -327,7 +349,7 @@ fn vote_lag_measures_distance_to_head() {
 
     // The warn threshold itself is still quiet; only a lag past it speaks up.
     let at_threshold = ValidatorStatus::Ok {
-        commission_bps: 700,
+        commission_bps: Some(700),
         last_vote_slot: Some(HEAD_SLOT - DEFAULT_VOTE_LAG_WARN_SLOTS),
     };
     assert!(!at_threshold.is_behind(head, DEFAULT_VOTE_LAG_WARN_SLOTS));
@@ -335,7 +357,7 @@ fn vote_lag_measures_distance_to_head() {
     // The head is read before the vote account, so a validator can legitimately
     // report a slot ahead of it. That is zero lag, never a wrapped u64.
     let ahead = ValidatorStatus::Ok {
-        commission_bps: 700,
+        commission_bps: Some(700),
         last_vote_slot: Some(HEAD_SLOT + 5),
     };
     assert_eq!(ahead.vote_lag(head), Some(0));
@@ -348,7 +370,7 @@ fn vote_lag_is_unknown_on_degraded_records() {
     assert_eq!(
         missing,
         ValidatorStatus::Ok {
-            commission_bps: 700,
+            commission_bps: Some(700),
             last_vote_slot: None,
         }
     );
@@ -373,7 +395,7 @@ fn vote_lag_is_unknown_on_degraded_records() {
 #[test]
 fn delinquent_validator_is_not_double_flagged_as_behind() {
     let delinquent = ValidatorStatus::Delinquent {
-        commission_bps: 500,
+        commission_bps: Some(500),
         last_vote_slot: Some(HEAD_SLOT - 2729),
     };
     assert_eq!(delinquent.vote_lag(Some(HEAD_SLOT)), Some(2729));
@@ -451,7 +473,7 @@ fn entry_with_reward(
 
 fn healthy_validator() -> ValidatorStatus {
     ValidatorStatus::Ok {
-        commission_bps: 700,
+        commission_bps: Some(700),
         last_vote_slot: Some(HEAD_SLOT - 2),
     }
 }
@@ -513,7 +535,7 @@ fn report_flags_delinquent_in_header() {
             "backup",
             StakeStatus::Active,
             ValidatorStatus::Delinquent {
-                commission_bps: 500,
+                commission_bps: Some(500),
                 last_vote_slot: Some(HEAD_SLOT - 2729),
             },
         ),
@@ -559,7 +581,7 @@ fn report_flags_lagging_validator_before_delinquency() {
             "backup",
             StakeStatus::Active,
             ValidatorStatus::Ok {
-                commission_bps: 700,
+                commission_bps: Some(700),
                 last_vote_slot: Some(HEAD_SLOT - 61),
             },
         ),
@@ -581,7 +603,7 @@ fn configured_warn_threshold_drives_the_behind_flag() {
         "main",
         StakeStatus::Active,
         ValidatorStatus::Ok {
-            commission_bps: 700,
+            commission_bps: Some(700),
             last_vote_slot: Some(HEAD_SLOT - 61),
         },
     );
@@ -608,7 +630,7 @@ fn report_never_invents_a_lag_number() {
             "main",
             StakeStatus::Active,
             ValidatorStatus::Ok {
-                commission_bps: 700,
+                commission_bps: Some(700),
                 last_vote_slot: None,
             },
         ),
@@ -650,6 +672,22 @@ fn report_stays_under_char_cap() {
         REPORT_CHAR_CAP
     );
     assert!(report.contains("omitted"), "report: {report}");
+
+    // The same bound has to hold on the failure path, which interpolates a
+    // value the caller chose. Before this, a multi-kilobyte argument came back
+    // in full inside the error string the agent reads.
+    let hostile = "\u{043f}".repeat(8_000);
+    let capped = cap_failure(format!("stake account `{hostile}` is not configured"));
+    assert!(
+        capped.chars().count() <= REPORT_CHAR_CAP,
+        "capped failure is {} chars, cap is {}",
+        capped.chars().count(),
+        REPORT_CHAR_CAP
+    );
+    assert!(capped.ends_with("… (truncated)"), "capped: {capped}");
+    assert!(capped.starts_with("stake account `"), "capped: {capped}");
+    let short = "stake account `main` is not configured".to_string();
+    assert_eq!(cap_failure(short.clone()), short);
 }
 
 fn crowded_entries() -> Vec<Entry> {
@@ -890,7 +928,7 @@ fn an_unstaked_delinquent_validator_is_reported_as_delinquent() {
     assert_eq!(
         status,
         ValidatorStatus::Delinquent {
-            commission_bps: 500,
+            commission_bps: Some(500),
             last_vote_slot: Some(433_719_000),
         }
     );

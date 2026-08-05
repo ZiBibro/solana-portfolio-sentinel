@@ -216,9 +216,23 @@ subcommand` error means the feature flag did not take.
 
 ## 3. Get the plugin source
 
+Leave the host checkout first, so the two clones end up as siblings. The rebuild
+recipe in 3.1 reaches the host as `../zeroclaw`, which only resolves in that
+layout:
+
 ```bash
+cd ..
 git clone https://github.com/ZiBibro/solana-portfolio-sentinel
 cd solana-portfolio-sentinel
+```
+
+Every later section calls the host as a bare `zeroclaw`. It was built in step 2
+and is not on your PATH, so put it there once, or keep the full path in a
+variable and use that instead:
+
+```bash
+export PATH="$PWD/../zeroclaw/target/release:$PATH"
+zeroclaw --version   # zeroclaw 0.8.3
 ```
 
 The repository carries the three plugin crates, the `wit/` contract they compile
@@ -516,7 +530,9 @@ name = "lending-health"
 [plugins.entries.config]
 # Comma-separated allowlist, "label:pubkey" or a bare pubkey. Required.
 # The model can narrow a query to fewer of these; it cannot add one.
-wallets = "main:REPLACE_WITH_YOUR_WALLET_PUBKEY"
+# The label `own` is the one the scheduled prompt in section 7.2 names, so keep
+# it if you paste that prompt unchanged.
+wallets = "own:REPLACE_WITH_YOUR_WALLET_PUBKEY"
 # Required whenever marginfi is enabled, because that path is an on-chain read.
 rpc_url = "https://REPLACE_WITH_YOUR_RPC_ENDPOINT"
 kamino_api_base = "https://api.kamino.finance"
@@ -1150,10 +1166,14 @@ your Rust installation.
 Everything above gets you a brief. Getting the brief tomorrow, and the morning
 after, needs the daemon alive when you are not at the machine. This is the part
 that decides whether the agent is a demo or a habit, and it is where our own
-stand fell short: the demo machine sleeps overnight, so for two weeks every
-recorded unattended run came from a schedule we had shifted forward by minutes
-rather than from the 08:00 the config declares. The gap is worth naming because
-it is easy to inherit.
+stand fell short for two weeks: the demo machine sleeps overnight, so until
+3 August every recorded unattended run came from a schedule we had shifted
+forward by minutes rather than from the 08:00 the config declares. It cleared on
+3 and 4 August, when the job fired at the declared 08:00 Europe/Kyiv with
+nothing rescheduled and the scheduler recorded `last=2026-08-03T05:00:20 (ok)`;
+both of those runs are the transcripts README.md and SHOWCASE.md publish. The
+gap is worth naming anyway, because it is easy to inherit and it is what the
+rest of this section is for.
 
 **Two things kill a scheduled agent, and neither reports itself.** The machine
 sleeping is the first: a suspended process does not run cron, and on wake the
@@ -1438,7 +1458,7 @@ of tool time rather than as a figure with three significant digits.
 | Host release build, wall clock | 13 min 07 s (20:01:04 to 20:14:11) | 2026-07-18 |
 | Host binary size | 38.7 MB | 2026-07-18 |
 | Host `target/` size after build | 3.3 GB | 2026-08-01 |
-| Distance from pinned commit to `origin/master` | 30 commits | fetched 2026-07-28 |
+| Distance from pinned commit to `origin/master` | 138 commits | fetched 2026-07-28T00:00Z |
 | Distance from pinned commit to `origin/master` | 204 commits (`cc92c86`) | fetched 2026-08-01 |
 | Host release build from `cc92c86`, wall clock | 21 min 37 s | 2026-08-01 |
 | One plugin release build, cold `target/` | 44.81 s (`stake-monitor`) | 2026-08-01 |
