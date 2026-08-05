@@ -270,8 +270,8 @@ Measured on this checkout, 2026-08-02:
 |---|---|
 | `lending-health` | 83 |
 | `stake-monitor` | 47 |
-| `stake-tx-build` | 81 |
-| total | **211** |
+| `stake-tx-build` | 86 |
+| total | **216** |
 
 These match the README and the pull-request body. If your run reports something
 else, the checkout moved: measure yours and trust that.
@@ -1428,7 +1428,7 @@ of tool time rather than as a figure with three significant digits.
 | Distance from pinned commit to `origin/master` | 99 commits (`cc92c86`) | fetched 2026-08-01 |
 | Host release build from `cc92c86`, wall clock | 21 min 37 s | 2026-08-01 |
 | One plugin release build, cold `target/` | 44.81 s (`stake-monitor`) | 2026-08-01 |
-| Host tests across the three crates | 211 passing | 2026-08-01 |
+| Host tests across the three crates | 216 passing | 2026-08-01 |
 | `exec_tool` example build, warm host target | 4.41 s | 2026-08-01 |
 | lending-health response, 2 wallets / 6 positions | 1792 ms | 2026-07-29 |
 | lending-health response, 20 wallets / 50 positions | 2523 ms | 2026-07-29 |

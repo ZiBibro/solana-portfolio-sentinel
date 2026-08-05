@@ -13,10 +13,10 @@ many of those tests cover a refusal or an unknown path, and the names of the
 byte-exact transaction goldens. Drop `--no-wasm` and it also builds the three
 components and prints their byte sizes with a sha256 prefix. Every number comes
 out of that run; nothing in the output is typed by hand. A run on 5 August 2026
-printed 211 tests passed, 57 of them on refusal and unknown paths, and three
+printed 216 tests passed, 57 of them on refusal and unknown paths, and three
 components at 396180, 353372 and 378000 bytes.
 
-211 tests and no wasm toolchain needed for the `--no-wasm` path. The tests
+216 tests and no wasm toolchain needed for the `--no-wasm` path. The tests
 themselves reach no network; cargo still fetches the pinned dependencies once.
 Timed on a fresh clone on 3 August 2026: 61 seconds from `git clone` to the last
 green line, on cargo 1.97.1 rather than the 1.96.1 the CI pins. What a live run
@@ -266,8 +266,8 @@ Host tests run without a wasm toolchain and without network access:
 |---|---|
 | lending-health | 83 |
 | stake-monitor | 47 |
-| stake-tx-build | 81 |
-| total | 211 |
+| stake-tx-build | 86 |
+| total | 216 |
 
 CI runs `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked
 --all-targets -- -D warnings` on both the host target and `wasm32-wasip2`, and a
