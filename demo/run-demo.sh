@@ -74,6 +74,12 @@ for p in "${PLUGINS[@]}"; do
   i=$(( i + 1 ))
 done
 row "total" "$refusal_total of $total_passed"
+# Two public documents advertise this figure, so a `--list` that silently stops
+# working must fail the run rather than print a confident zero.
+if [[ "$refusal_total" == "0" ]]; then
+  echo "FAILED: the refusal filter matched nothing; --list output changed shape?"
+  exit 1
+fi
 rule
 
 # --------------------------------------------------- byte-exact goldens
@@ -81,7 +87,10 @@ echo "byte-exact transaction goldens in stake-tx-build"
 golden="$(cargo test --locked --quiet --manifest-path plugins/stake-tx-build/Cargo.toml -- --list 2>/dev/null \
   | grep -E ': test$' | grep -Ei 'golden|byte_for_byte|byte_exact' | sed 's/: test$//' || true)"
 if [[ -z "$golden" ]]; then
-  echo "  none found"
+  # Same reason: the goldens are named in the README, so their disappearance is
+  # a failure rather than a line of output.
+  echo "FAILED: no byte-exact golden was found; --list output changed shape?"
+  exit 1
 else
   printf '%s\n' "$golden" | while read -r t; do row "" "$t"; done
 fi

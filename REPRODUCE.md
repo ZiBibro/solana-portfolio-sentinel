@@ -8,6 +8,9 @@ human to sign elsewhere.
 Everything below was executed on the machine that runs the demo, and every command,
 path, version number and error string in this document was copied from real output.
 Where a number is a measurement it says so. Where something is optional it says so.
+One exception, named where it appears: the Linux and macOS service recipes in
+section 8.6 come from the host's own documentation and were never run here,
+because the demo stand is Windows.
 
 **Time budget.** With the prerequisites already installed, about ninety minutes of
 wall clock, of which roughly twenty minutes is the compiler working while you make
@@ -138,8 +141,8 @@ We verified this exact path on 2026-08-01 against `cc92c86`. All three crates
 rebuilt with no source change, each artifact grew by exactly 13 bytes, and all
 three then instantiated and executed on that host. The rebuilt sizes were
 385998, 352755 and 377524 bytes; your digests will differ if your toolchain
-differs, which is expected and is discussed under "What a digest does and does
-not prove" below.
+differs, which is expected and is discussed under "Compare digests only against
+clean builds" below.
 
 **The binding runs both ways, and we measured that too.** Components rebuilt
 against `cc92c86` fail on the pinned host with the same linker error, in mirror
@@ -295,9 +298,12 @@ commit it was last pushed at, which is behind this repository.
 
 ## 4. Build the three components
 
-Each crate is built independently, from inside its own directory, because the
-`wit_bindgen::generate!` macro resolves `path: "../../wit/v0"` relative to the crate.
-Building from a copied-out directory will fail to find the contract.
+Each crate is built independently. The `cd` below is a convenience: the
+`wit_bindgen::generate!` macro resolves `path: "../../wit/v0"` against the crate
+manifest rather than against your shell, so building from the repository root
+with `--manifest-path` works too, and that is what `demo/run-demo.sh` and CI both
+do. What does break is copying a crate out of this tree, where `../../wit/v0` no
+longer resolves.
 
 ### 4.1 lending-health
 
@@ -373,10 +379,12 @@ zeroclaw --config-dir "$ZC_HOME" plugin list
 Verified on a clean config directory:
 
 ```
-Plugin installed from .../src-lending-health
+Plugin installed from ./plugins/lending-health
 Seeded [[plugins.entries]] for 'lending-health'. Set plugin config values with `zeroclaw config set plugins.entries.lending-health.config.<key>`.
 Installed plugins:
   lending-health v0.1.0 — DeFi lending position health for operator wallets: LTV vs liquidation across Kamino and MarginFi, shaped for chat
+  stake-monitor v0.1.0 — Stake account status for operator accounts: delegation lifecycle, validator health, epoch progress and rewards
+  stake-tx-build v0.1.0 — Builds an unsigned delegate or deactivate stake transaction for operator approval; the plugin holds no keys and cannot sign or submit
 ```
 
 The installer copies the directory to `$ZC_HOME/plugins/<name>/` and, as that second
@@ -1065,10 +1073,12 @@ you pressed the button or never saw it. We reproduced that on two different tool
 
 Only the timestamp and trace id differ. In a system where operator approval is the
 control over transactions, the log asserts a human decision where the human was
-silent. This is a host issue, not a plugin one, and it is filed upstream. Until it
-is fixed, raise `approval_timeout_secs` (the template sets 600) so a card you walked
-away from is still yours to answer, and read the timing in the trace rather than
-trusting the wording.
+silent. This is a host issue, not a plugin one, and it is filed upstream as
+[zeroclaw#9642](https://github.com/zeroclaw-labs/zeroclaw/issues/9642), closed as
+completed on 3 August 2026 by PR #9423. The pinned 0.8.3 host still shows it, so
+on that host raise `approval_timeout_secs` (the template sets 600) so a card you
+walked away from is still yours to answer, and read the timing in the trace rather
+than trusting the wording.
 
 Two smaller things in the same area. The card's buttons stay live after a decision,
 so pressing Approve after Deny animates a confirmation and does nothing. And the
@@ -1277,7 +1287,8 @@ create a stake account, and delegate it to a validator. Do it twice with two
 different validators, and pick one with 0% commission for the second. That second
 account is not decoration: Solana's `commission` field can come back `null`, and
 having a genuine zero to compare against is how you confirm a report renders
-`fee 0.0%` rather than blanking. Our stand ran with 2.105 SOL across two accounts.
+`fee 0.0%` rather than blanking. Our stand ran with 2.109 SOL across two accounts,
+1.008 and 1.101; the published payload shows the same pair.
 
 Then set in the config:
 

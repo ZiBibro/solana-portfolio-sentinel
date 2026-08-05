@@ -11,6 +11,10 @@ config at them:
 ```toml
 [skill_bundles.solana-sentinel]
 
+# This key goes INTO the `[agents.<name>]` table your config already has. Pasting
+# a second `[agents.<name>]` header is a duplicate key, and the host answers by
+# resetting the whole config to defaults for that run with one warning line.
+# REPRODUCE.md section 7.3 records what that looks like.
 [agents.<your agent>]
 skill_bundles = ["solana-sentinel"]
 

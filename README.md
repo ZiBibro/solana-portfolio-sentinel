@@ -29,9 +29,9 @@ daily habit instead of a library.
 
 **Watch it run (2:11):** https://www.youtube.com/watch?v=nRbTZSxMAQg
 
-**Where this sits in the field, counted.** Measured
-2026-08-03 against all 109 open pull requests in `zeroclaw-labs/zeroclaw-plugins`
-and the 31 plugins already in the registry:
+**Where this sits in the field, counted.** Measured 2026-08-02 at 17:00 Kyiv
+against all 109 open pull requests in `zeroclaw-labs/zeroclaw-plugins` and the
+31 plugins already in the registry:
 
 | question | count |
 |---|---|
@@ -285,9 +285,11 @@ Host tests run without a wasm toolchain and without network access:
 | stake-tx-build | 86 |
 | total | 224 |
 
-CI runs `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked
---all-targets -- -D warnings` on both the host target and `wasm32-wasip2`, and a
-locked release build for `wasm32-wasip2`, on Rust 1.96.1.
+CI runs `cargo fmt --check`; the reviewer entry point above, which is where
+`cargo test --locked` runs, on the host target; `cargo clippy --locked
+--all-targets -- -D warnings` on both the host target and `wasm32-wasip2`; and a
+locked release build for `wasm32-wasip2`. On Rust 1.96.1. There is no wasm test
+runner in the job, so the tests are host-only by design.
 
 [`REPRODUCE.md`](REPRODUCE.md) walks an operator from a bare machine to a running
 agent, including the host build, and every command in it was executed on the

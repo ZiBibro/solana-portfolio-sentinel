@@ -123,9 +123,9 @@ Two readers and one builder, each a `wasm32-wasip2` component in the `plugins/re
 
 `lending-health` reads Kamino over REST and decodes MarginFi accounts from chain state, 2312 raw bytes with `i80f48` fixed-point at four offsets, gated on the program's own `ENGINE_OK` flag. The liquidation buffer follows Kamino's own norm, `(liquidation_ltv - ltv) / liquidation_ltv`, and the warning thresholds compare against that relative form. The `7.0% buffer` in the Telegram line above is the model's own subtraction, 79.9 minus 72.9 in percentage points, which measures the same gap on a different basis.
 
-`stake-monitor` merges four RPC methods across the configured accounts into two lines: delegation lifecycle and validator health, including vote lag, epoch progress, plus the previous epoch's reward.
+`stake-monitor` merges four RPC methods across the configured accounts into two lines: delegation lifecycle, validator delinquency with vote lag, epoch progress, and the previous epoch's reward.
 
-`stake-tx-build` produces unsigned delegate and deactivate transactions with no `solana-sdk` anywhere, compiling and serializing the legacy message by hand. Durable nonces are supported with `AdvanceNonceAccount` placed first, the condition Solana requires for durability. A golden test pins the byte layout against a real mainnet delegate transaction. On devnet, `simulateTransaction` returned `err: null` for both actions, at 16956 and 10882 compute units.
+`stake-tx-build` produces unsigned delegate and deactivate transactions with no `solana-sdk` anywhere, compiling and serializing the legacy message by hand. Durable nonces are supported with `AdvanceNonceAccount` placed first, the condition Solana requires for durability. A golden test pins the byte layout against a real mainnet delegate transaction. On devnet, `simulateTransaction` returned `err: null` for both actions, at 16956 and 10882 compute units. The five differential tests beside the goldens build every message twice, once through the hand-rolled encoder and once through the official `solana-message` and `solana-stake-interface` crates, and compare what the two messages mean.
 
 It also asks the chain one question before it builds, and which question depends on the action. Before a delegate it reads whether the target validator still votes; before a deactivate it reads whether the stake has a deactivation recorded already. Both came from the same realisation: an allowlist is a statement about ownership, and it says nothing about what the chain holds today. A validator entered months ago can stop voting tomorrow, and a stake that finished cooling down cannot be deactivated again.
 
@@ -292,8 +292,12 @@ symptom points somewhere else. Those are fixed here.
 What both passes have in common: the finding only counts once someone has run
 the command and read the output. A `check-invariants.py` script, private to the
 working repository this one is published from, then keeps the fixed classes
-fixed: it checks that the numbers in these documents still agree with each other
-and with the code they describe.
+fixed: it checks the classes that have already bitten, which today means the
+test totals and their per-crate split, the closed and open state of the upstream
+issues, the CI run cited against the current head, and the character budgets of
+the texts that go out. It is a ratchet over known failures rather than a general
+proof, and the reaudit on 5 August found several disagreements it had no check
+for; those became checks.
 
 ## What I got wrong along the way
 

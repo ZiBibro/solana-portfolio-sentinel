@@ -44,9 +44,12 @@ jobs:
           done
 
       # The same entry point the README hands a reviewer. It runs every host
-      # test and fails the job on any failing test, so the reviewer path cannot
-      # rot unnoticed. The wasm half is skipped here; the build step below
-      # covers it.
+      # test and fails the job on any failing test, and it also fails if the
+      # refusal filter or the golden enumeration comes back empty, so the three
+      # figures the README advertises cannot rot unnoticed. The wasm half is
+      # skipped here; the build step below covers it. Note that the plugin set
+      # comes from an array inside the script, so a fourth plugin has to be
+      # added there as well as landing in plugins/.
       - name: Host tests via the reviewer entry point
         shell: bash
         run: bash demo/run-demo.sh --no-wasm
