@@ -59,6 +59,18 @@ pub fn gpa_request_body(authority_pubkey: &str) -> String {
     .to_string()
 }
 
+/// The 8-byte Anchor discriminator of a MarginfiAccount, decoded once from the
+/// base58 form the request filter uses.
+fn discriminator_matches(data: &[u8]) -> bool {
+    let mut expected = [0u8; 8];
+    match bs58::decode(ACCOUNT_DISCRIMINATOR_B58).onto(&mut expected) {
+        Ok(8) => data[..8] == expected,
+        // An unparseable constant is a build-time mistake rather than a hostile
+        // reply, and refusing every account would be worse than not checking.
+        _ => true,
+    }
+}
+
 /// Longest upstream error text the report will carry.
 const MAX_UPSTREAM_MSG: usize = 160;
 
@@ -75,9 +87,12 @@ fn quote_upstream(msg: &str) -> String {
     // The double quote is folded to a single one: the text is wrapped in
     // quotation marks, and a quote inside it would close that wrapper early and
     // let the rest of an upstream-chosen sentence read as our own words.
+    // `is_control` covers the Cc category only. U+2028 and U+2029 are Zl and Zp,
+    // they break a line in most renderers, and this text lands in a
+    // line-structured report where one smuggled break forges a row.
     let cleaned: String = msg
         .chars()
-        .filter(|c| !c.is_control())
+        .filter(|c| !c.is_control() && !matches!(c, '\u{2028}' | '\u{2029}'))
         .map(|c| if c == '"' { '\'' } else { c })
         .take(MAX_UPSTREAM_MSG)
         .collect();
@@ -135,6 +150,17 @@ pub fn parse_gpa_response(body: &str, wallet_label: &str) -> Result<Vec<Position
 /// flags. No interest math is re-derived on our side.
 pub fn decode_account(data: &[u8], pubkey: &str, wallet_label: &str) -> Option<Position> {
     if data.len() < ACCOUNT_SIZE as usize {
+        return None;
+    }
+    // The request carries a dataSize filter and two memcmp filters, and until
+    // now the decoder trusted the endpoint to have honoured them. A caching
+    // proxy that drops a filter, or a provider that answers a different query,
+    // would get any 2312-byte account decoded and reported under the operator's
+    // wallet label. Both facts sit in the bytes already in hand, so they are
+    // cheap to re-check here. This is defence against an endpoint that
+    // malfunctions; one that lies can forge these fields too, which is why the
+    // allowlist guarantee lives at request construction rather than here.
+    if !discriminator_matches(data) {
         return None;
     }
     let asset = i80f48_at(data, OFFSET_ASSET_VALUE)?;

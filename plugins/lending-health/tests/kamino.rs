@@ -326,14 +326,6 @@ fn a_row_with_one_unreadable_amount_keeps_the_position_and_labels_the_gap() {
 /// The defect in the terms an operator would meet it in: a wallet one point from
 /// its liquidation line, whose deposit figure the endpoint mangled, used to be
 /// reported as holding no positions at all.
-///
-/// The mirror case is here too, because it failed in a worse way for longer. An
-/// unreadable BORROW substitutes 0, and the substituted zero used to reach the
-/// verdict through the `no debt` shortcut: the same row, 0.74 against a 0.75
-/// line with 1.3% of buffer left, rendered `[OK] ... no debt` under a header of
-/// `worst risk OK`, the safest state this report can show. A zero nobody
-/// measured is not a measured zero. The last block pins the other direction, so
-/// the rule cannot be satisfied by refusing every zero.
 #[test]
 fn a_wallet_at_its_line_is_never_reported_as_holding_nothing() {
     let cfg = kamino_only_config();
@@ -350,7 +342,17 @@ fn a_wallet_at_its_line_is_never_reported_as_holding_nothing() {
         report.contains("(deposit value unreadable)"),
         "report: {report}"
     );
+}
 
+/// The mirror of the case above, and it failed in a worse way for longer. An
+/// unreadable BORROW substitutes 0, and the substituted zero used to reach the
+/// verdict through the `no debt` shortcut: this row sits at 0.74 against a 0.75
+/// line, 1.3% of buffer left, and rendered `[OK] ... no debt` under a header of
+/// `worst risk OK`, the safest state this report can show. A zero nobody
+/// measured is not a measured zero.
+#[test]
+fn an_unreadable_borrow_is_never_reported_as_no_debt() {
+    let cfg = kamino_only_config();
     let positions = parse_portfolio(&one_row("\"53724.48\"", "\"NaN\""), "main").expect("parses");
     assert!(
         !positions[0].borrow_measured,
@@ -375,7 +377,14 @@ fn a_wallet_at_its_line_is_never_reported_as_holding_nothing() {
         report.contains("(borrow value unreadable)"),
         "report: {report}"
     );
+}
 
+/// The other direction of the same rule, so it cannot be satisfied by refusing
+/// every zero: a borrow that was read and is genuinely zero still earns the
+/// `no debt` line, which is the safest state a position can be in.
+#[test]
+fn a_measured_zero_borrow_still_reads_as_no_debt() {
+    let cfg = kamino_only_config();
     let positions = parse_portfolio(&one_row("\"843.0\"", "\"0\""), "main").expect("parses");
     assert!(positions[0].borrow_measured);
     assert_eq!(classify_position(&positions[0], &cfg), Risk::Ok);
