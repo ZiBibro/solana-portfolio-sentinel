@@ -1,3 +1,9 @@
+// The official crates are dev-dependencies for the host target only, so this
+// file has nothing to link against under wasm32-wasip2. CI runs clippy with
+// --all-targets on that target too, which would otherwise fail here on six
+// unresolved imports rather than on anything real.
+#![cfg(not(target_family = "wasm"))]
+
 //! Differential test: this crate's hand-rolled encoder against the official crates.
 //!
 //! The golden tests in `txbuild.rs` pin our bytes against one real mainnet
