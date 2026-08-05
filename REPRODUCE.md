@@ -257,6 +257,13 @@ checkout is sound:
 for manifest in plugins/*/Cargo.toml; do cargo test --locked --manifest-path "$manifest"; done
 ```
 
+There is a shorter way that also prints the counts back to you, including how
+many of the tests sit on refusal and unknown paths:
+
+```bash
+bash demo/run-demo.sh --no-wasm
+```
+
 Measured on this checkout, 2026-08-02:
 
 | crate | tests passing |
