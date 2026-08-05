@@ -2,18 +2,26 @@
 
 [![CI](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml)
 
-**Reviewing this? Two minutes gets you the code side of the claim.** Clone, then:
+**Reviewing this? One command gets you the code side of the claim.** Clone, then:
 
 ```bash
-for m in plugins/*/Cargo.toml; do cargo test --locked --manifest-path "$m"; done
+bash demo/run-demo.sh --no-wasm
 ```
 
-211 tests and no wasm toolchain needed. The tests themselves reach no network;
-cargo still fetches the pinned dependencies once. Timed on a fresh clone on
-3 August 2026: 61 seconds from `git clone` to the last green line, on cargo
-1.97.1 rather than the 1.96.1 the CI pins. What a live run prints is in
-[What a run looks like](#what-a-run-looks-like) below, taken from the trace
-copied out of the trace. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
+It prints counts instead of a green tick: host tests passed per component, how
+many of those tests cover a refusal or an unknown path, and the names of the
+byte-exact transaction goldens. Drop `--no-wasm` and it also builds the three
+components and prints their byte sizes with a sha256 prefix. Every number comes
+out of that run; nothing in the output is typed by hand. A run on 5 August 2026
+printed 211 tests passed, 57 of them on refusal and unknown paths, and three
+components at 396180, 353372 and 378000 bytes.
+
+211 tests and no wasm toolchain needed for the `--no-wasm` path. The tests
+themselves reach no network; cargo still fetches the pinned dependencies once.
+Timed on a fresh clone on 3 August 2026: 61 seconds from `git clone` to the last
+green line, on cargo 1.97.1 rather than the 1.96.1 the CI pins. What a live run
+prints is in [What a run looks like](#what-a-run-looks-like) below, taken from
+the trace. The full setup path is [`REPRODUCE.md`](REPRODUCE.md),
 [`SHOWCASE.md`](SHOWCASE.md) is the write-up with the custody tier, threat model
 and honest limits, and [`shared/`](shared/) is the composition that makes it a
 daily habit instead of a library.
