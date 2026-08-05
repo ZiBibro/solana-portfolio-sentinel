@@ -18,7 +18,7 @@ components at 396450, 354394 and 378000 bytes.
 
 224 tests and no wasm toolchain needed for the `--no-wasm` path. The tests
 themselves reach no network; cargo still fetches the pinned dependencies once.
-Timed on a fresh clone on 5 August 2026 at 216 tests: 75 seconds from `git clone` to the last
+Timed on a fresh clone on 6 August 2026: 64 seconds from `git clone` to the last
 green line, on cargo 1.97.1 rather than the 1.96.1 the CI pins, with the crates
 already in the local cargo cache. Budget two to three minutes if that cache is
 cold, which is what the script's own header says. What a live run prints is in
