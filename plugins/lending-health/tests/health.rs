@@ -230,6 +230,7 @@ fn position(label: &str, market: &str, ltv: f64) -> Position {
             ltv,
             liquidation_ltv: 0.85,
         }),
+        borrow_measured: true,
         flagged_unhealthy: false,
         stale_hint: None,
     }
@@ -522,7 +523,8 @@ fn total_failure_text_states_a_single_short_issue_in_full() {
 }
 
 /// The two protocols measure LTV on different bases and share one column, while
-/// the dollar amounts beside them are unweighted in both cases. A MarginFi line
+/// the dollar amounts beside them sit on a third basis in both cases: Kamino's
+/// plain position values, and MarginFi's initial-weight health-cache pair. A MarginFi line
 /// showing $5,000 deposit, $10,000 borrow and 75% invites the operator to divide
 /// and conclude the tool is broken. The percentage is right on its own basis, so
 /// the line names the basis.
@@ -540,6 +542,7 @@ fn a_marginfi_ltv_says_it_is_maintenance_weighted() {
             ltv: 0.75,
             liquidation_ltv: 1.0,
         }),
+        borrow_measured: true,
         flagged_unhealthy: false,
         stale_hint: None,
     };
@@ -559,6 +562,7 @@ fn a_marginfi_ltv_says_it_is_maintenance_weighted() {
             ltv: 0.663,
             liquidation_ltv: 0.799,
         }),
+        borrow_measured: true,
         flagged_unhealthy: false,
         stale_hint: None,
     };
@@ -592,6 +596,7 @@ fn a_position_with_no_debt_is_ok_not_unknown() {
             ltv: 0.0,
             liquidation_ltv: 0.0,
         }),
+        borrow_measured: true,
         flagged_unhealthy: false,
         stale_hint: Some("positions stale 1003 h".to_string()),
     };
@@ -615,6 +620,7 @@ fn a_condemned_account_stays_critical_even_with_no_debt() {
         account: "EN1W..K7ND".to_string(),
         deposit_usd: 100.0,
         borrow_usd: 0.0,
+        borrow_measured: true,
         liquidation: None,
         flagged_unhealthy: true,
         stale_hint: None,
