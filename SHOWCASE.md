@@ -118,7 +118,7 @@ to = "<your chat id>"
 
 ## What I had to build
 
-Two readers and one builder, each a `wasm32-wasip2` component in the `plugins/redact-text` layout: pure core with a thin wasm shim, host-run tests that touch no live network. 211 host tests, `clippy -D warnings` clean on both targets.
+Two readers and one builder, each a `wasm32-wasip2` component in the `plugins/redact-text` layout: pure core with a thin wasm shim, host-run tests that touch no live network. 216 host tests, `clippy -D warnings` clean on both targets.
 
 `lending-health` reads Kamino over REST and decodes MarginFi accounts from chain state, 2312 raw bytes with `i80f48` fixed-point at four offsets, gated on the program's own `ENGINE_OK` flag. The liquidation buffer follows Kamino's own norm, `(liquidation_ltv - ltv) / liquidation_ltv`, and the warning thresholds compare against that relative form. The `7.0% buffer` in the Telegram line above is the model's own subtraction, 79.9 minus 72.9 in percentage points, which measures the same gap on a different basis.
 
@@ -324,7 +324,7 @@ before publishing.
 
 **The published runbook shipped a test table that did not add up.** Rows of 83,
 47 and 81 sat under a previous total of 190, left over from before the last
-round of regression tests. They sum to 211, which is what every other file
+round of regression tests. They sum to 216, which is what every other file
 already said. The invariant checker that exists to catch exactly this had a context
 window too narrow to see the table header, so it stayed silent. Three more of
 its checks turned out to be measuring nothing at all, matching heading formats
