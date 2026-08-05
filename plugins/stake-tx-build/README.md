@@ -189,7 +189,7 @@ nonce configured, returns:
 
 ```
 Unsigned deactivate transaction. Verify each address below in full before signing, and do not abbreviate them when relaying: a shortened address can be ground to match on its visible ends. Stake account CUupRKBoZ3WvHV24uBtCMXz3ms2geTad7g1k2ZpyqPmq (config label `main`), fee payer and sole signer AAJNL7uZrwcCFPAFJHRiSDEKXGgdZXhpL427iqkDFnre; lifetime: fresh blockhash, sign and submit within roughly 60 to 90 seconds; amount: not read by this builder.
-unsigned_tx_base64: AQAAAA...BAUAAAA
+unsigned_tx_base64: AQAAAAAAAAAAAAAAAAAAAAAA...hgEDAwECAAQFAAAA   (320 characters)
 ```
 
 Decoded byte for byte, the deactivation instruction verifies against the Stake

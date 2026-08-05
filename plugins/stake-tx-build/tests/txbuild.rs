@@ -650,6 +650,22 @@ fn deactivate_builds_expected_wire_transaction() {
         .expect("base64 output");
     let tx = decode_tx(&bytes);
 
+    // The worked example in this plugin's README quotes this transaction elided.
+    // It used to quote a tail hand-assembled from the instruction bytes, which
+    // the encoder cannot produce, so the head, the tail and the length are
+    // pinned here against the README.
+    assert_eq!(built.tx_base64.len(), 320);
+    assert!(
+        built.tx_base64.starts_with("AQAAAAAAAAAAAAAAAAAAAAAA"),
+        "README head drifted: {}",
+        built.tx_base64
+    );
+    assert!(
+        built.tx_base64.ends_with("hgEDAwECAAQFAAAA"),
+        "README tail drifted: {}",
+        built.tx_base64
+    );
+
     // Unsigned form: the signature count equals numRequiredSignatures and
     // every slot is a 64-byte zero placeholder.
     assert_eq!(tx.signature_count, 1);
