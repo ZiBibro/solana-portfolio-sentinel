@@ -349,30 +349,39 @@ procedure name, and without the name the model does not call `sop_execute` at
 all. The SOP checkpoint has no channel delivery either, so approvals live in the
 CLI and the admin API. The runbook says so where it matters.
 
-## What I would build next
+## Where this can go next
 
-Four things, in the order I would take them.
+Four extensions the design already leaves room for. Read them as what the shape
+of this system admits, and as evidence that the boundaries were drawn with a
+second version in mind.
+
+This is deliberately not a roadmap. The submission is frozen at the deadline and
+stays frozen while judging runs, so that every entry is judged on what it was on
+the day it was submitted.
 
 **A `nonce-manage` companion.** Creating a durable nonce account is a one-off
-setup step and the Solana CLI does it fine. What a companion adds is the rest of
-the lifecycle an approval queue eventually needs: rotating an authority, retiring
-an account, and keeping one nonce per pending transaction, since a single account
-serializes to a single in-flight transaction.
+setup step and the Solana CLI does it fine. The rest of the lifecycle is what an
+approval queue eventually needs: rotating an authority, retiring an account, and
+keeping one nonce per pending transaction, since a single account serializes to a
+single in-flight transaction. It belongs beside `stake-tx-build` rather than
+inside it, because none of that touches the encoder this plugin exists to be.
 
 **A cadence that answers the gap named under [Honest limits](#honest-limits).**
-A thirty-minute schedule that speaks only when a buffer narrows is a config
-change rather than new code, and it is what I would ship first if this ran for
-someone other than me.
+The daily schedule is the reported weakness, and closing it costs a config line
+rather than new code: the schedule already lives in `[cron.morning-brief]`, and
+the same components answer on demand in chat. A thirty-minute cadence that speaks
+only when a buffer narrows needs nothing compiled.
 
-**Position history.** Every report here is a snapshot on purpose: a run reads
-what the chain says at that moment and holds no state, which is what keeps it
-reproducible and keeps the components free of storage permissions. Trend is a
-real second question, and the honest way to answer it is a companion that owns a
-datastore and reads these reports rather than a flag on these ones.
+**Position history.** Every report here is a snapshot on purpose: a run reads what
+the chain says at that moment and holds no state, which is what keeps it
+reproducible and keeps the components free of storage permissions. Trend is a real
+second question, and the shape that answers it is a companion owning a datastore
+and reading these reports, rather than a flag on these ones.
 
 **A third protocol, and only then a shared position model.** MarginFi and Kamino
-share almost nothing structurally, so the abstraction that fits both is guesswork
-until a third case says what is actually common.
+share almost nothing structurally, which is why there is no common abstraction
+here yet: one that fits two cases is guesswork until a third says what is actually
+common. The `Position` type is deliberately narrow for that reason.
 
 ## Reproduce it
 
