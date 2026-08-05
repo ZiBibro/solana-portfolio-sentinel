@@ -324,8 +324,8 @@ before publishing.
 
 **The published runbook shipped a test table that did not add up.** Rows of 83,
 47 and 81 sat under a previous total of 190, left over from before the last
-round of regression tests. They sum to 216, which is what every other file
-already said. The invariant checker that exists to catch exactly this had a context
+round of regression tests. They summed to 211, which is what every other file
+said at the time. The invariant checker that exists to catch exactly this had a context
 window too narrow to see the table header, so it stayed silent. Three more of
 its checks turned out to be measuring nothing at all, matching heading formats
 that no file uses. All four are fixed, and each fix was proven by putting the
