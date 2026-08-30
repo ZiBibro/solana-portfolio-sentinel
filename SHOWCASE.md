@@ -248,6 +248,33 @@ The reason to include this at all is what it says about the method. Three indepe
 
 **Update, 26 August 2026.** Six of the nine are now closed as completed rather than three. [#9672](https://github.com/zeroclaw-labs/zeroclaw/issues/9672) on the broken `cron add` help examples closed on 6 August, and [#9656](https://github.com/zeroclaw-labs/zeroclaw/issues/9656) on the typing indicator closed on 9 August by [PR #9823](https://github.com/zeroclaw-labs/zeroclaw/pull/9823), which an outside contributor picked up from the report and implemented against the scoping in the triage note; the paragraph above describing that indicator as still running now documents a host older than that fix. The sixth was [#9643](https://github.com/zeroclaw-labs/zeroclaw/issues/9643) on the versioning contract, closed on 13 August by [PR #9950](https://github.com/zeroclaw-labs/zeroclaw/pull/9950), which states the rule this write-up asked for: adding a case to an existing enum breaks previously compiled plugins. Of the three that remain open, #9653 on plugin TLS trust is untouched and #9654 on the three-word denial was unblocked on 21 August once its prerequisite merged; #9655 on approval card position has [PR #10004](https://github.com/zeroclaw-labs/zeroclaw/pull/10004) open against it. Everything above this line is the text as submitted on 6 August, and none of it has been edited.
 
+**Update, 30 August 2026: the packages moved to typed instance config.** On 20
+August [zeroclaw-labs/zeroclaw#9126](https://github.com/zeroclaw-labs/zeroclaw/pull/9126)
+made `config_read` and `config_schema` a biconditional in the host, with no
+compatibility shim: a manifest that requests the permission without declaring a
+schema stops being discovered or installed. All three packages here were on the
+wrong side of that line, so they have been migrated following the maintainer's
+own template, [zeroclaw-plugins#149](https://github.com/zeroclaw-labs/zeroclaw-plugins/pull/149),
+filed under [issue #147](https://github.com/zeroclaw-labs/zeroclaw-plugins/issues/147).
+
+Each manifest now declares a closed Draft 2020-12 schema naming exactly the keys
+its guest reads, and the guests consume typed `__config` in one deserialization
+step. It is breaking for an operator, hence 0.2.0: the four allowlist-shaped keys
+were comma-separated strings and are JSON arrays now. Two relations stay in the
+guest code because JSON Schema cannot state them between sibling properties, and
+the guest-side unknown-key check is replaced by tests that read `manifest.toml`
+and assert the schema declares every key the code reads.
+
+**The part worth knowing if you are reproducing this.** The pinned `fc8b4d83`
+host still installs 0.2.0, because `PluginManifest` at that commit derives plain
+`Deserialize` and discards the unknown table without complaint, and it then
+injects the old flat string map, so every configured call fails. Plugin version
+and host pin move together; [`REPRODUCE.md`](REPRODUCE.md) section 1.1 says which
+pairs with which. No post-#9126 host was built here, and that section says so.
+
+Numbers in this document were re-measured after the migration: 241 host tests,
+59 of them on refusal and unknown paths.
+
 ## Honest limits
 
 **The schedule is daily, and a liquidation does not wait for morning.** The brief
