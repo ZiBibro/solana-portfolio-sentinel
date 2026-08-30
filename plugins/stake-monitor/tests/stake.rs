@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
-use serde_json::Value;
+use serde_json::{json, Value};
 use stake_monitor::stake::{
     cap_failure, derive_status, parse_epoch_info, parse_inflation_rewards, parse_stake_account,
     parse_vote_status, render_payload, render_report, render_total_failure, vote_account_body,
     Config, Delegation, Entry, EpochProgress, Reward, StakeState, StakeStatus, ValidatorStatus,
-    DEFAULT_VOTE_LAG_WARN_SLOTS, REPORT_CHAR_CAP,
+    CONFIG_KEYS, DEFAULT_VOTE_LAG_WARN_SLOTS, REPORT_CHAR_CAP,
 };
 
 const STAKE_A: &str = "6ySLTQWEpCFKPYKfPaKYnhKzEccuqKafFEzfJVQ4Gifp";
@@ -33,48 +31,87 @@ fn stake_account_json(deactivation: &str) -> String {
     )
 }
 
-fn section(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
+/// The manifest is read as text rather than parsed, so these tests need no TOML
+/// dependency and still fail when the schema and the guest drift apart.
+const MANIFEST: &str = include_str!("../manifest.toml");
+
+/// The smallest config the plugin accepts, in the typed shape the host injects
+/// since it began validating against `[config_schema]`.
+fn base_config() -> Value {
+    json!({
+        "stake_accounts": [format!("main:{STAKE_A}")],
+        "rpc_url": "https://example-rpc.test",
+    })
 }
 
-fn base_section() -> HashMap<String, String> {
-    section(&[
-        ("stake_accounts", &format!("main:{STAKE_A}")[..]),
-        ("rpc_url", "https://example-rpc.test"),
-    ])
+/// `base_config` with one key overridden, for the tests that vary a single
+/// field.
+fn with(key: &str, value: Value) -> Value {
+    let mut cfg = base_config();
+    cfg[key] = value;
+    cfg
 }
 
 fn cfg() -> Config {
-    Config::from_section(&base_section()).expect("base section")
+    Config::from_json(&base_config()).expect("base config")
 }
 
 #[test]
-fn config_parses_valid_section() {
-    let cfg = Config::from_section(&base_section()).expect("valid section");
+fn config_parses_valid_object() {
+    let cfg = Config::from_json(&base_config()).expect("valid config");
     assert_eq!(cfg.accounts.len(), 1);
     assert_eq!(cfg.accounts[0].label, "main");
 }
 
 #[test]
-fn config_rejects_unknown_key() {
-    let mut s = base_section();
-    s.insert("stake_acounts".to_string(), "x".to_string());
-    let err = Config::from_section(&s).unwrap_err();
+fn config_accepts_typed_numbers_and_arrays() {
+    // Both of these arrive as real JSON types now. Before 0.2.0 the allowlist
+    // was a comma-separated string and the slot count a string the guest
+    // parsed itself.
+    let cfg = Config::from_json(&json!({
+        "stake_accounts": [format!("main:{STAKE_A}"), STAKE_B],
+        "rpc_url": "https://example-rpc.test",
+        "vote_lag_warn_slots": 8,
+        "timeout_secs": 30,
+    }))
+    .expect("typed config");
+    assert_eq!(cfg.accounts.len(), 2);
+    assert_eq!(cfg.accounts[1].label, "stake2");
+    assert_eq!(cfg.vote_lag_warn_slots, 8);
+    assert_eq!(cfg.timeout_secs, 30);
+}
+
+#[test]
+fn config_rejects_the_pre_0_2_0_comma_separated_encoding() {
+    // The old operator value was one comma-separated string. Splitting it here
+    // would resurrect the untyped path the host removed.
+    let err =
+        Config::from_json(&with("stake_accounts", json!(format!("main:{STAKE_A}")))).unwrap_err();
     assert!(
-        err.contains("unknown config key `stake_acounts`"),
+        err.contains("does not match the declared schema"),
         "err: {err}"
     );
 }
 
 #[test]
+fn config_error_does_not_echo_the_offending_value() {
+    // Config values here are stake pubkeys and the operator's RPC endpoint,
+    // both secret-marked by the host, so a ToolResult must never carry one
+    // back to the model.
+    let err =
+        Config::from_json(&with("rpc_url", json!(["https://leaked-endpoint.test"]))).unwrap_err();
+    assert!(
+        !err.contains("leaked-endpoint"),
+        "err leaked a value: {err}"
+    );
+    assert!(!err.contains(STAKE_A), "err leaked a pubkey: {err}");
+}
+
+#[test]
 fn config_reads_vote_lag_warn_slots() {
     assert_eq!(cfg().vote_lag_warn_slots, DEFAULT_VOTE_LAG_WARN_SLOTS);
-    let mut s = base_section();
-    s.insert("vote_lag_warn_slots".to_string(), " 8 ".to_string());
-    let tightened = Config::from_section(&s).expect("in-range override");
+    let tightened =
+        Config::from_json(&with("vote_lag_warn_slots", json!(8))).expect("in-range override");
     assert_eq!(tightened.vote_lag_warn_slots, 8);
 }
 
@@ -82,41 +119,94 @@ fn config_reads_vote_lag_warn_slots() {
 fn config_rejects_out_of_range_vote_lag_warn_slots() {
     // Zero would flag every validator that is not exactly at the head, and a
     // value past the delinquency distance could only fire after the verdict.
-    for bad in ["0", "129", "-1", "many"] {
-        let mut s = base_section();
-        s.insert("vote_lag_warn_slots".to_string(), bad.to_string());
-        let err = Config::from_section(&s).unwrap_err();
-        assert!(err.contains("vote_lag_warn_slots"), "`{bad}` gave: {err}");
+    // The schema states the same bounds; this proves the guest holds them on a
+    // host-side run where no schema validation happens.
+    for bad in [json!(0), json!(129)] {
+        let err = Config::from_json(&with("vote_lag_warn_slots", bad.clone())).unwrap_err();
+        assert!(err.contains("vote_lag_warn_slots"), "{bad} gave: {err}");
+    }
+    // A negative and a non-numeric value cannot even deserialize into u64, so
+    // they fail earlier, in the schema-shaped error rather than at the bound.
+    for bad in [json!(-1), json!("many")] {
+        let err = Config::from_json(&with("vote_lag_warn_slots", bad.clone())).unwrap_err();
+        assert!(
+            err.contains("does not match the declared schema"),
+            "{bad} gave: {err}"
+        );
+    }
+}
+
+#[test]
+fn config_requires_stake_accounts() {
+    let err = Config::from_json(&json!({"rpc_url": "https://example-rpc.test"})).unwrap_err();
+    assert!(err.contains("`stake_accounts` is required"), "err: {err}");
+}
+
+#[test]
+fn config_null_fails_closed_on_the_required_allowlist() {
+    // A withheld config_read grant injects an empty object, and a host that
+    // injects nothing at all sends null. Neither may start a reader with no
+    // account it is permitted to read.
+    for empty in [Value::Null, json!({})] {
+        let err = Config::from_json(&empty).unwrap_err();
+        assert!(err.contains("`stake_accounts` is required"), "err: {err}");
     }
 }
 
 #[test]
 fn config_requires_rpc_url() {
-    let s = section(&[("stake_accounts", &format!("main:{STAKE_A}")[..])]);
-    assert!(Config::from_section(&s).unwrap_err().contains("rpc_url"));
+    let err =
+        Config::from_json(&json!({"stake_accounts": [format!("main:{STAKE_A}")]})).unwrap_err();
+    assert!(err.contains("rpc_url"), "err: {err}");
 }
 
 #[test]
 fn config_rejects_http_url() {
-    let s = section(&[
-        ("stake_accounts", &format!("main:{STAKE_A}")[..]),
-        ("rpc_url", "http://insecure.test"),
-    ]);
-    assert!(Config::from_section(&s).is_err());
+    assert!(Config::from_json(&with("rpc_url", json!("http://insecure.test"))).is_err());
 }
 
 #[test]
 fn config_rejects_bad_pubkey() {
-    let s = section(&[
-        ("stake_accounts", "main:tooshort"),
-        ("rpc_url", "https://example-rpc.test"),
-    ]);
-    assert!(Config::from_section(&s).is_err());
+    assert!(Config::from_json(&with("stake_accounts", json!(["main:tooshort"]))).is_err());
+}
+
+#[test]
+fn manifest_pairs_config_read_with_config_schema() {
+    // The host treats the two as a biconditional and refuses to discover a
+    // package that declares one without the other, so this is the cheapest
+    // possible guard against shipping an uninstallable manifest.
+    assert!(
+        MANIFEST.contains("\"config_read\""),
+        "manifest no longer requests config_read"
+    );
+    assert!(
+        MANIFEST.contains("[config_schema]"),
+        "manifest requests config_read without declaring config_schema"
+    );
+    assert!(
+        MANIFEST.contains("additionalProperties = false"),
+        "config_schema must be closed for the config_read grant to be enumerable"
+    );
+}
+
+#[test]
+fn manifest_schema_declares_every_config_key() {
+    // The guest no longer rejects unknown keys itself: additionalProperties =
+    // false does that before the component starts. This is what replaces that
+    // check.
+    assert!(!CONFIG_KEYS.is_empty(), "the key list must not be empty");
+    for key in CONFIG_KEYS {
+        let declaration = format!("[config_schema.properties.{key}]");
+        assert!(
+            MANIFEST.contains(&declaration),
+            "config key `{key}` is read by the guest but absent from config_schema"
+        );
+    }
 }
 
 #[test]
 fn resolve_rejects_non_allowlisted() {
-    let cfg = Config::from_section(&base_section()).unwrap();
+    let cfg = Config::from_json(&base_config()).unwrap();
     let err = cfg.resolve_account(Some(STAKE_B)).unwrap_err();
     assert!(
         err.contains("not in the configured allowlist"),
@@ -647,9 +737,8 @@ fn configured_warn_threshold_drives_the_behind_flag() {
             last_vote_slot: Some(HEAD_SLOT - 61),
         },
     );
-    let mut s = base_section();
-    s.insert("vote_lag_warn_slots".to_string(), "100".to_string());
-    let relaxed = Config::from_section(&s).expect("raised threshold");
+    let relaxed =
+        Config::from_json(&with("vote_lag_warn_slots", json!(100))).expect("raised threshold");
 
     // 61 slots trips the 32-slot default and stays quiet at 100.
     let entries = std::slice::from_ref(&lagging);

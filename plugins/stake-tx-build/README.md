@@ -42,20 +42,40 @@ stranded with no override.
 
 ## Config keys
 
-The operator configures the plugin by name; the host resolves that one section
-and hands the plugin a flat `string -> string` map, injected as `__config`. This
-only happens because the manifest requests the `config_read` permission.
+`manifest.toml` carries a closed Draft 2020-12 `config_schema` naming every key
+below. The host rejects a manifest that requests `config_read` without one, and
+it validates the operator's stored values against the schema before injecting
+them into `execute` arguments as a typed `__config` object.
 
-| Key | Default | Meaning |
-|---|---|---|
-| `stake_accounts` | (required) | Comma-separated allowlist. Each entry is `label:pubkey` or a bare pubkey. The only stake accounts the tool will act on. |
-| `authority` | (required) | Fee payer and stake authority **public key**. Never a private key. |
-| `rpc_url` | (required) | HTTPS Solana RPC endpoint read for a blockhash. Must start with `https://`. |
-| `cluster` | `mainnet-beta` | Cluster the endpoint's reported genesis hash must match. Stays on `mainnet-beta` unless the operator names another public cluster; the alternatives are `devnet` and `testnet`. Any other value is rejected. |
-| `allowed_vote_accounts` | (empty) | Comma-separated allowlist of vote accounts eligible as delegation targets. Empty disables `delegate` entirely. |
-| `nonce_account` | (unset) | Durable nonce account pubkey. Set with `nonce_authority` to build a transaction that survives an approval queue. |
-| `nonce_authority` | (unset) | Authority pubkey for the durable nonce. Must be set together with `nonce_account`. |
-| `timeout_secs` | `10` | Connect timeout for the RPC call, between 1 and 60. |
+| Key | Schema type | Default | Meaning |
+|---|---|---|---|
+| `stake_accounts` | `array` of `string` | (required) | Allowlist. Each entry is `label:pubkey` or a bare pubkey. The only stake accounts the tool will act on. |
+| `authority` | `string` | (required) | Fee payer and stake authority **public key**. Never a private key. |
+| `rpc_url` | `string` | (required) | HTTPS Solana RPC endpoint read for a blockhash. Must start with `https://`. |
+| `cluster` | `string` enum | `mainnet-beta` | Cluster the endpoint's reported genesis hash must match. Stays on `mainnet-beta` unless the operator names another public cluster; the alternatives are `devnet` and `testnet`. Any other value is rejected. |
+| `allowed_vote_accounts` | `array` of `string` | (empty) | Allowlist of vote accounts eligible as delegation targets. Empty disables `delegate` entirely. |
+| `nonce_account` | `string` | (unset) | Durable nonce account pubkey. Set with `nonce_authority` to build a transaction that survives an approval queue. |
+| `nonce_authority` | `string` | (unset) | Authority pubkey for the durable nonce. Must be set together with `nonce_account`. |
+| `timeout_secs` | `integer` | `10` | Connect timeout for the RPC call, between 1 and 60. |
+
+Operator storage is still a string map, and the schema is what tells the host
+how to read each stored string. Set the two allowlists like this:
+
+```bash
+key=$(zeroclaw plugin info stake-tx-build)   # prints the zpi1_... instance key
+zeroclaw config set "plugins.entries.$key.config.stake_accounts" '["main:<pubkey>"]'
+zeroclaw config set "plugins.entries.$key.config.allowed_vote_accounts" '["<vote pubkey>"]'
+```
+
+**Breaking change in 0.2.0.** `stake_accounts` and `allowed_vote_accounts` were
+comma-separated strings before this release and are JSON arrays now, and
+`timeout_secs` is a real integer. The host rejects the old encoding rather than
+reading it as one malformed entry, which matters more here than in the two
+readers: both of these lists are security boundaries rather than conveniences,
+and a silently misread allowlist is the failure this design exists to prevent.
+Two relations stay in the plugin because JSON Schema cannot state them between
+sibling properties: the nonce pair must be set together or not at all, and the
+endpoint's genesis hash must match the pinned cluster.
 
 Upgrading from a version without the cluster gate: `cluster` now defaults to
 `mainnet-beta`, so a config whose `rpc_url` points at devnet or testnet fails

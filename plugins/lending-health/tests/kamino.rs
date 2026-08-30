@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use lending_health::health::{classify_position, render_report, Config, Protocol, Risk};
 use lending_health::kamino::{iso_to_epoch, parse_portfolio, portfolio_url};
 
@@ -11,13 +9,11 @@ const EMPTY: &str = include_str!("fixtures/kamino_portfolio_empty.json");
 const WALLET: &str = "86xCnPeV69n6t3DnyGvkKobf9FdN2H9oiVDdaMpo2MMY";
 
 fn kamino_only_config() -> Config {
-    let section: HashMap<String, String> = [
-        ("wallets".to_string(), format!("main:{WALLET}")),
-        ("protocols".to_string(), "kamino".to_string()),
-    ]
-    .into_iter()
-    .collect();
-    Config::from_section(&section).expect("test config")
+    Config::from_json(&serde_json::json!({
+        "wallets": [format!("main:{WALLET}")],
+        "protocols": ["kamino"],
+    }))
+    .expect("test config")
 }
 
 /// One lending row with caller-chosen JSON literals for the two amounts, so a

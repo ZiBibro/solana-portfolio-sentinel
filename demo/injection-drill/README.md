@@ -80,5 +80,5 @@ scope here, as it is for every claim in this repository.
 
 The same refusal is covered by host tests, so it can be re-derived without
 running an agent at all. `bash demo/run-demo.sh --no-wasm` prints how many tests
-in each component sit on refusal and unknown paths; on 6 August 2026 that was 58
-of 224.
+in each component sit on refusal and unknown paths; on 30 August 2026 that was 59
+of 241.

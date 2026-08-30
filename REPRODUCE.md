@@ -127,6 +127,42 @@ added `memory-audit` variant and `channel.wit` with two doc comments rewritten.
 So an operator who installs the current release today and skips the pin lands on
 the failure above. The pin, or the rebuild recipe below, is the whole fix.
 
+### 1.1 What the pin means for plugin version 0.2.0
+
+Read this before installing if you are on the `main` branch of this repository
+rather than on commit `1158595`.
+
+Version 0.2.0 of the three plugins declares a `config_schema` in each
+`manifest.toml` and consumes a typed `__config` object, because
+[zeroclaw-labs/zeroclaw#9126](https://github.com/zeroclaw-labs/zeroclaw/pull/9126)
+made those a requirement on 2026-08-20: a manifest that requests `config_read`
+without a schema is no longer discovered or installed by a current host.
+
+Against the pinned `fc8b4d83` host, which predates that change, two things
+happen and only one of them is visible:
+
+- **Installation still succeeds.** `PluginManifest` at the pin derives plain
+  `Deserialize` with no `deny_unknown_fields`, so the extra `[config_schema]`
+  table is read and discarded without complaint. Verified by reading the struct
+  at that exact commit rather than by inference.
+- **Configured calls then fail.** The pinned host injects `__config` as a flat
+  string map, and the 0.2.0 guests expect real arrays and integers, so a call
+  with any configured allowlist returns `config error: config does not match the
+  declared schema`.
+
+So the pin and the plugin version have to move together:
+
+| plugin version | host to build | state |
+|---|---|---|
+| 0.1.0, this repository at `1158595` | `fc8b4d83` | the combination the demo and every capture in this document were produced on |
+| 0.2.0, current `main` | any commit carrying #9126, merged 2026-08-20 | the combination a current ZeroClaw accepts |
+
+**Honest limit on that second row.** This session migrated the plugins and ran
+every host-side gate on them, and it did not build a post-#9126 host, so the
+end-to-end capture in section 3 below still shows the 0.1.0 output. Treat the
+second row as the requirement the host states, rather than as something these
+notes have watched run.
+
 **If you built the pinned commit, nothing here affects you.** Skip to section 3.
 
 **If you already built a newer host,** you do not need a different version of
@@ -288,7 +324,7 @@ Measured on this checkout, 2026-08-06:
 | `lending-health` | 88 |
 | `stake-monitor` | 50 |
 | `stake-tx-build` | 86 |
-| total | **224** |
+| total | **241** |
 
 These match the README. If your run reports something else, the checkout moved:
 measure yours and trust that. The registry pull request carries the counts of the
@@ -386,6 +422,10 @@ Installed plugins:
   stake-monitor v0.1.0 — Stake account status for operator accounts: delegation lifecycle, validator health, epoch progress and rewards
   stake-tx-build v0.1.0 — Builds an unsigned delegate or deactivate stake transaction for operator approval; the plugin holds no keys and cannot sign or submit
 ```
+
+That capture is from the 0.1.0 tree on the pinned host, and it is left as it was
+recorded. On current `main` the same three lines read `v0.2.0`; see section 1.1
+for which host each version needs.
 
 The installer copies the directory to `$ZC_HOME/plugins/<name>/` and, as that second
 line says, writes `config.toml`: it seeds a bare `[[plugins.entries]]` carrying only
@@ -1473,7 +1513,7 @@ of tool time rather than as a figure with three significant digits.
 | Distance from pinned commit to `origin/master` | 204 commits (`cc92c86`) | fetched 2026-08-01 |
 | Host release build from `cc92c86`, wall clock | 21 min 37 s | 2026-08-01 |
 | One plugin release build, cold `target/` | 44.81 s (`stake-monitor`) | 2026-08-01 |
-| Host tests across the three crates | 224 passing | 2026-08-06 |
+| Host tests across the three crates | 241 passing | 2026-08-30 |
 | `exec_tool` example build, warm host target | 4.41 s | 2026-08-01 |
 | lending-health response, 2 wallets / 6 positions | 1792 ms | 2026-07-29 |
 | lending-health response, 20 wallets / 50 positions | 2523 ms | 2026-07-29 |

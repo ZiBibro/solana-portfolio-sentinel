@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use base64::Engine;
 use lending_health::health::{classify_position, render_report, Config, Protocol, Risk};
 use lending_health::marginfi::{
@@ -31,16 +29,11 @@ fn account_bytes(fixture: &str) -> Vec<u8> {
 }
 
 fn config() -> Config {
-    let section: HashMap<String, String> = [
-        ("wallets".to_string(), format!("main:{AUTHORITY}")),
-        (
-            "rpc_url".to_string(),
-            "https://example-rpc.test".to_string(),
-        ),
-    ]
-    .into_iter()
-    .collect();
-    Config::from_section(&section).expect("test config")
+    Config::from_json(&serde_json::json!({
+        "wallets": [format!("main:{AUTHORITY}")],
+        "rpc_url": "https://example-rpc.test",
+    }))
+    .expect("test config")
 }
 
 #[test]
