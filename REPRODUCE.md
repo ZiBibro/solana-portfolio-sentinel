@@ -317,13 +317,13 @@ many of the tests sit on refusal and unknown paths:
 bash demo/run-demo.sh --no-wasm
 ```
 
-Measured on this checkout, 2026-08-06:
+Measured on this checkout, 2026-08-31:
 
 | crate | tests passing |
 |---|---|
-| `lending-health` | 88 |
-| `stake-monitor` | 50 |
-| `stake-tx-build` | 86 |
+| `lending-health` | 94 |
+| `stake-monitor` | 56 |
+| `stake-tx-build` | 91 |
 | total | **241** |
 
 These match the README. If your run reports something else, the checkout moved:
@@ -570,6 +570,14 @@ shell_env_passthrough = []
 #    non-string property must CONTAIN valid JSON: a list is a single-quoted
 #    string holding a JSON array, as the four list keys below show. The old
 #    comma-separated form is refused, not silently read as one entry.
+#    The `name` of an entry is the plugin's INSTANCE KEY, not the package name.
+#    The host looks entries up by the key printed on the `Config entry key` line
+#    of `zeroclaw plugin info <package>`; an entry named after the package is not
+#    consulted at all, and nothing warns you. `config list` still prints its
+#    values and the daemon still starts, so the failure surfaces only when the
+#    tool runs and reports its required key missing. `plugin install` seeds the
+#    correct key for you, so the safest route is to install first and fill the
+#    values under the name it wrote.
 #    Each [plugins.entries.config] must sit DIRECTLY under its own
 #    [[plugins.entries]] header. TOML array-of-tables ordering is unforgiving
 #    here: a stray section between them attaches the config to the wrong entry.
@@ -578,10 +586,11 @@ shell_env_passthrough = []
 enabled = true
 
 [[plugins.entries]]
-name = "lending-health"
+# The instance key, not the package name. See the note above.
+name = "zpi1_WyJsZW5kaW5nLWhlYWx0aCIsInRvb2wiLCJsZW5kaW5nLWhlYWx0aCJd"
 
 [plugins.entries.config]
-# Comma-separated allowlist, "label:pubkey" or a bare pubkey. Required.
+# JSON array of "label:pubkey" or bare pubkey, as a quoted string. Required.
 # The model can narrow a query to fewer of these; it cannot add one.
 # The label `own` is the one the scheduled prompt in section 7.2 names, so keep
 # it if you paste that prompt unchanged.
@@ -595,7 +604,8 @@ critical_liquidation_buffer = "0.05"
 timeout_secs = "10"
 
 [[plugins.entries]]
-name = "stake-monitor"
+# The instance key, not the package name. See the note above.
+name = "zpi1_WyJzdGFrZS1tb25pdG9yIiwidG9vbCIsInN0YWtlLW1vbml0b3IiXQ"
 
 [plugins.entries.config]
 stake_accounts = '["main:REPLACE_WITH_YOUR_STAKE_ACCOUNT_PUBKEY"]'
@@ -604,7 +614,8 @@ vote_lag_warn_slots = "32"
 timeout_secs = "10"
 
 [[plugins.entries]]
-name = "stake-tx-build"
+# The instance key, not the package name. See the note above.
+name = "zpi1_WyJzdGFrZS10eC1idWlsZCIsInRvb2wiLCJzdGFrZS10eC1idWlsZCJd"
 
 [plugins.entries.config]
 stake_accounts = '["main:REPLACE_WITH_YOUR_STAKE_ACCOUNT_PUBKEY"]'
@@ -635,26 +646,26 @@ high_entropy_tokens = false
 ### 6.1 The config keys are not guesswork
 
 Every key above came out of the components themselves, not out of documentation.
-Each plugin validates its config section fail-closed and prints the full valid set
-when it sees a key it does not know. That behaviour is your reference manual:
+
+**0.2.0 moved where a typo is caught.** In 0.1.0 each guest policed its own
+config and printed the full valid set on an unknown key. Now each
+`manifest.toml` declares a closed `config_schema` with
+`additionalProperties = false`, and the host validates the entry against it
+before the component runs, so the guest never sees a stray key. A typo stays a
+loud failure rather than a silent default: a misspelled `allowed_vote_accounts`
+must not quietly restore an empty allowlist.
+
+What changed is when and where you see it. The refusal now names the schema
+location rather than listing the valid keys:
 
 ```
-error: config error: unknown config key `bogus`; expected one of:
-  wallets, rpc_url, kamino_api_base, protocols,
-  warn_liquidation_buffer, critical_liquidation_buffer, timeout_secs
-
-error: config error: unknown config key `bogus`; expected one of:
-  stake_accounts, rpc_url, vote_lag_warn_slots, timeout_secs
-
-error: config error: unknown config key `bogus`; expected one of:
-  stake_accounts, authority, rpc_url, cluster,
-  allowed_vote_accounts, nonce_account, nonce_authority, timeout_secs
+plugin 'lending-health' config violates config_schema at '/additionalProperties'
 ```
 
-A typo is therefore a loud failure, never a silent default. That is deliberate:
-a misspelled `allowed_vote_accounts` must not quietly restore an empty allowlist.
-
-Full key semantics, with defaults and bounds, are in appendix A.
+and it surfaces on the first tool call, not at install or in `plugin list`: both
+of those still succeed with a stray key present. Appendix A is therefore the
+reference manual now, and the key tables in each plugin README are generated from
+the same schemas.
 
 ### 6.2 Secrets, and what happens to this file
 
@@ -943,12 +954,18 @@ cp -r shared "$ZC_HOME/"
 <install>/shared/skills/solana-sentinel/liquidation-price/SKILL.md
 ```
 
+These are two separate edits to `config.toml`, and pasting them as one block puts
+the second key inside the first table. The bundle declaration goes at top level:
+
 ```toml
 [skill_bundles.solana-sentinel]
+```
 
-# and this key goes INTO the existing [agents.sentinel] table, same as cron_jobs
-# above; a second [agents.sentinel] header is a duplicate key and silently
-# resets the whole config to defaults
+and this key goes INTO the existing `[agents.sentinel]` table, beside `cron_jobs`
+above. A second `[agents.sentinel]` header is a duplicate key and silently resets
+the whole config to defaults:
+
+```toml
 skill_bundles = ["solana-sentinel"]
 ```
 
@@ -1379,6 +1396,17 @@ component through the real runtime and calls it directly. It is not part of any
 upstream contribution and lives only in a local clone, so create it yourself at
 `crates/zeroclaw-plugins/examples/exec_tool.rs` in the host checkout:
 
+**This driver compiles against the pinned `fc8b4d83` host only.** Two upstream
+changes rewrote the runtime API after that pin. The typed-config work replaced
+`create_plugin`'s permission slice with a plugin instance scope, and a later
+change removed the config and permission arguments from `call_execute`
+altogether, because config now reaches the guest through the store's resolved
+scope. On a current host the two calls below do not compile and the argument
+lists have nowhere to put their JSON. Section 1.1 pairs each package version
+with the host it needs; if you are on a post-typed-config host, drive the
+plugin through the agent instead, or read the current signatures in
+`crates/zeroclaw-plugins/src/runtime.rs` and adjust the two calls.
+
 ```rust
 //! Local test driver: run one tool plugin through the real host runtime.
 //! Usage: exec_tool <wasm_path> <args_json> <config_json>
@@ -1458,16 +1486,20 @@ its arguments before its config, so probe it with a real action rather than `{}`
 
 ## Appendix A: every config key, with defaults and bounds
 
-Read out of the components. Values in `config.toml` are always quoted strings.
+Read out of the components. Every value in `config.toml` is a quoted string, and
+since 0.2.0 each non-string key must CONTAIN valid JSON: a list is a quoted string
+holding a JSON array, a number is a quoted numeral. The `Type` column below names
+what the manifest schema declares, which is what decides how the host reads the
+stored string.
 
 ### lending-health
 
 | Key | Required | Default | Meaning and bounds |
 |---|---|---|---|
-| `wallets` | yes | — | Comma-separated allowlist, `label:pubkey` or bare pubkey. The tool refuses to run with none. |
+| `wallets` | yes | — | `array` of `string`. Allowlist, `label:pubkey` or bare pubkey, written as `'["own:PUBKEY"]'`. The tool refuses to run with none. |
 | `rpc_url` | when `marginfi` is enabled | none | Must start with `https://`. Used for the MarginFi on-chain read. |
 | `kamino_api_base` | no | `https://api.kamino.finance` | Must start with `https://`. |
-| `protocols` | no | `kamino,marginfi` | Any subset of `kamino` and `marginfi`; at least one. |
+| `protocols` | no | `'["kamino","marginfi"]'` | `array` of `string`. Any subset of `kamino` and `marginfi`; at least one. |
 | `warn_liquidation_buffer` | no | `0.15` | Liquidation buffer at or below which a position is `WARN`. |
 | `critical_liquidation_buffer` | no | `0.05` | Same for `CRITICAL`. Must be strictly below the warn value, since a warning fires while more of the buffer remains. |
 | `timeout_secs` | no | `10` | Per-request connect timeout, 1 to 60. |
@@ -1476,7 +1508,7 @@ Read out of the components. Values in `config.toml` are always quoted strings.
 
 | Key | Required | Default | Meaning and bounds |
 |---|---|---|---|
-| `stake_accounts` | yes | — | Comma-separated allowlist, `label:pubkey` or bare pubkey (auto-labelled `stake1`, `stake2`, and so on). |
+| `stake_accounts` | yes | — | `array` of `string`. Allowlist, `label:pubkey` or bare pubkey (auto-labelled `stake1`, `stake2`, and so on), written as `'["main:PUBKEY"]'`. |
 | `rpc_url` | yes | — | Must start with `https://`. Trailing slash trimmed. |
 | `vote_lag_warn_slots` | no | `32` | Slots of vote lag past which a still-voting validator is flagged. Bounded 1 to 128, the delinquency distance the RPC itself applies. |
 | `timeout_secs` | no | `10` | 1 to 60. |
@@ -1485,11 +1517,11 @@ Read out of the components. Values in `config.toml` are always quoted strings.
 
 | Key | Required | Default | Meaning and bounds |
 |---|---|---|---|
-| `stake_accounts` | yes | — | Comma-separated allowlist. The only stake accounts the tool will act on. |
+| `stake_accounts` | yes | — | `array` of `string`. The only stake accounts the tool will act on, written as `'["main:PUBKEY"]'`. |
 | `authority` | yes | — | Fee payer and stake authority **public** key. Validated as base58. |
 | `rpc_url` | yes | — | Must start with `https://`. |
 | `cluster` | no | `mainnet-beta` | One of `mainnet-beta`, `devnet`, `testnet`. Anything else is rejected; there is no fallback. The endpoint's genesis hash must match. |
-| `allowed_vote_accounts` | no | empty | Comma-separated vote accounts eligible as delegation targets. Empty disables `delegate` entirely. |
+| `allowed_vote_accounts` | no | `'[]'` | `array` of `string`. Vote accounts eligible as delegation targets. An empty array disables `delegate` entirely. |
 | `nonce_account` | no | unset | Durable nonce account pubkey. Must be set together with `nonce_authority`. |
 | `nonce_authority` | no | unset | Authority pubkey for that nonce. Must be set together with `nonce_account`. |
 | `timeout_secs` | no | `10` | 1 to 60. |
