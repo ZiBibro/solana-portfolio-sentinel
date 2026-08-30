@@ -8,9 +8,11 @@ tags: [solana, defi, pricing]
 
 # Liquidation price
 
-`lending_health` reports how far a position can fall before liquidation, as a
-percentage of the distance to its own line. A percentage is the honest unit for
-a plugin to report, because it holds regardless of what anything costs today.
+`lending_health` prints each position as a current LTV against the liquidation
+LTV that position is measured against, for example `LTV 63.2% of 72.9% liq`.
+The gap between the two is how far the position can fall before liquidation,
+and it is a percentage, which is the honest unit for a plugin to report because
+it holds regardless of what anything costs today.
 An operator, though, thinks in prices. This skill closes that gap without any
 compiled code.
 
@@ -48,16 +50,22 @@ Read `usdPrice`. Ignore the rest unless the operator asks about the 24 hour move
 
 ## The arithmetic
 
-The plugin's buffer is the fraction of collateral value the position can lose
-before it reaches its liquidation line. So:
+The report gives two LTV figures, not a buffer. Derive the buffer from them:
 
 ```
+buffer = (liquidation LTV − current LTV) / liquidation LTV
 liquidation price = current price × (1 − buffer)
 ```
 
-A position with a 12.5% buffer while SOL trades at 72.90 gets liquidated around
-`72.90 × 0.875 = 63.79`. Report it as a price and as a distance: "liquidation
-around $63.79, which is 12.5% below where SOL is now."
+The division matters. Subtracting the two percentages gives the gap in
+percentage points, which is a different number and always the smaller one, so
+using it puts the liquidation price too high and reports the position as safer
+than it is.
+
+Worked: `LTV 63.2% of 72.9% liq` gives `(72.9 − 63.2) / 72.9 = 0.133`. With SOL
+at 72.90 that is `72.90 × 0.867 = 63.20`. Report it as a price and as a
+distance: "liquidation around $63.20, which is 13.3% below where SOL is now."
+The bare subtraction would have given 9.7% and a price of $65.83.
 
 Round to cents. Do not present more precision than the inputs carry, and say the
 number is approximate, because the buffer was computed against a report that is

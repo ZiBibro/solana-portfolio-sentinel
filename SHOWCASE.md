@@ -311,6 +311,14 @@ end-to-end test before the handshake with `os error 10054`. The repository's own
 identically, on unmodified `master`. That is the quiet CI trap #9653 described,
 met from the other side while fixing it.
 
+**Update, 31 August 2026: the liquidation-price skill said the wrong arithmetic.**
+The paragraph above notes that the `7.0% buffer` in the Telegram line is the
+model's own subtraction rather than the plugin's basis. The skill file was the
+reason: it asked for a buffer the report never prints, so the model derived one,
+and subtraction is the derivation it reaches for. The skill now derives the
+buffer from the two printed LTV figures by division, states why the subtraction
+is wrong, and carries a worked example of both. Nothing above this line is edited.
+
 Of the nine reports, six are closed, two now have a fix open, and
 [#9655](https://github.com/zeroclaw-labs/zeroclaw/issues/9655) on approval-card
 position has [PR #10004](https://github.com/zeroclaw-labs/zeroclaw/pull/10004)

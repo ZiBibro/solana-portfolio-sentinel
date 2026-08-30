@@ -48,9 +48,10 @@ line is the product.
 
 ## skills/solana-sentinel/liquidation-price
 
-The layering argument, in a file. `lending-health` reports a buffer as a
-percentage, which is the honest unit for a component because it holds regardless
-of price. An operator thinks in prices. Converting between the two is one GET
+The layering argument, in a file. `lending-health` reports a current LTV against
+the liquidation LTV, and the gap between them is a percentage, which is the
+honest unit for a component because it holds regardless of price. An operator
+thinks in prices. Converting between the two is one GET
 against Jupiter's keyless endpoint plus a multiplication, and that work has no
 business inside a compiled WebAssembly component: it would buy nothing and cost
 the operator a rebuild to change.
