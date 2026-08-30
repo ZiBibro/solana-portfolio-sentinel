@@ -275,6 +275,47 @@ pairs with which. No post-#9126 host was built here, and that section says so.
 Numbers in this document were re-measured after the migration: 241 host tests,
 59 of them on refusal and unknown paths.
 
+**Update, 31 August 2026: two of the three open reports now carry a fix.** Both
+were written here rather than waited on.
+
+[#9654](https://github.com/zeroclaw-labs/zeroclaw/issues/9654) on the three-word
+operator denial is
+[PR #10490](https://github.com/zeroclaw-labs/zeroclaw/pull/10490). The maintainer
+unblocked the issue on 21 August and named the remaining slice as wording plus
+gate-level coverage, so the result a declined tool call hands the model now
+states what happened, that the call did not run, and that it must neither retry
+nor invent a cause. `Denied by user.` stays as the opening sentence, because that
+phrase is what separates this path from the runtime-generated denial beside it.
+Three gate tests cover it, each shown to fail under a mutation of the thing it
+guards. All 30 required checks pass.
+
+[#9653](https://github.com/zeroclaw-labs/zeroclaw/issues/9653) on plugin TLS
+trust is [PR #10491](https://github.com/zeroclaw-labs/zeroclaw/pull/10491). Its
+triage asked for coordination with the open egress work rather than a competing
+hook, so the branch stacks on
+[PR #9582](https://github.com/zeroclaw-labs/zeroclaw/pull/9582), whose host-owned
+sender is where plugin TLS now lives, and replaces the root-store construction
+there. Plugin HTTPS verifies against the bundled webpki program plus the roots
+the machine already trusts, which is what provider HTTPS in the same binary has
+done since #6600; chain building and hostname matching are untouched, and an
+unreadable platform store is recorded rather than made fatal. The four proofs the
+triage named each have a test, three of them reaching the verifier without a
+socket so the trust decisions stay deterministic, and one opening a real HTTPS
+request end to end. All 34 checks pass, with 182 crate tests run and none
+filtered.
+
+A note that belongs in this write-up because the report predicted it. The machine
+this was developed on runs a TLS-inspecting product, and it resets that
+end-to-end test before the handshake with `os error 10054`. The repository's own
+`private_ca_http_fails_unset_and_succeeds_with_matching_ca` fails there
+identically, on unmodified `master`. That is the quiet CI trap #9653 described,
+met from the other side while fixing it.
+
+Of the nine reports, six are closed, two now have a fix open, and
+[#9655](https://github.com/zeroclaw-labs/zeroclaw/issues/9655) on approval-card
+position has [PR #10004](https://github.com/zeroclaw-labs/zeroclaw/pull/10004)
+open from an outside contributor.
+
 ## Honest limits
 
 **The schedule is daily, and a liquidation does not wait for morning.** The brief

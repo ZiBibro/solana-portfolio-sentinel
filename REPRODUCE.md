@@ -563,8 +563,13 @@ shell_env_passthrough = []
 # 6. Plugins.
 #    plugins.enabled = true is REQUIRED; the default is false.
 #    Every value inside [plugins.entries.config] is a QUOTED STRING, including
-#    numbers and ratios: the host hands this section to the component as a
-#    map of string to string and does not interpret the keys.
+#    numbers, ratios and lists: operator storage is a map of string to string,
+#    and a bare TOML integer here is refused by the host with
+#    `invalid type: integer, expected a string`.
+#    Since 0.2.0 the schema decides how each stored string is read, and every
+#    non-string property must CONTAIN valid JSON: a list is a single-quoted
+#    string holding a JSON array, as the four list keys below show. The old
+#    comma-separated form is refused, not silently read as one entry.
 #    Each [plugins.entries.config] must sit DIRECTLY under its own
 #    [[plugins.entries]] header. TOML array-of-tables ordering is unforgiving
 #    here: a stray section between them attaches the config to the wrong entry.
@@ -580,11 +585,11 @@ name = "lending-health"
 # The model can narrow a query to fewer of these; it cannot add one.
 # The label `own` is the one the scheduled prompt in section 7.2 names, so keep
 # it if you paste that prompt unchanged.
-wallets = "own:REPLACE_WITH_YOUR_WALLET_PUBKEY"
+wallets = '["own:REPLACE_WITH_YOUR_WALLET_PUBKEY"]'
 # Required whenever marginfi is enabled, because that path is an on-chain read.
 rpc_url = "https://REPLACE_WITH_YOUR_RPC_ENDPOINT"
 kamino_api_base = "https://api.kamino.finance"
-protocols = "kamino,marginfi"
+protocols = '["kamino","marginfi"]'
 warn_liquidation_buffer = "0.15"
 critical_liquidation_buffer = "0.05"
 timeout_secs = "10"
@@ -593,7 +598,7 @@ timeout_secs = "10"
 name = "stake-monitor"
 
 [plugins.entries.config]
-stake_accounts = "main:REPLACE_WITH_YOUR_STAKE_ACCOUNT_PUBKEY"
+stake_accounts = '["main:REPLACE_WITH_YOUR_STAKE_ACCOUNT_PUBKEY"]'
 rpc_url = "https://REPLACE_WITH_YOUR_RPC_ENDPOINT"
 vote_lag_warn_slots = "32"
 timeout_secs = "10"
@@ -602,7 +607,7 @@ timeout_secs = "10"
 name = "stake-tx-build"
 
 [plugins.entries.config]
-stake_accounts = "main:REPLACE_WITH_YOUR_STAKE_ACCOUNT_PUBKEY"
+stake_accounts = '["main:REPLACE_WITH_YOUR_STAKE_ACCOUNT_PUBKEY"]'
 # The fee payer and stake authority PUBLIC key. Never a private key.
 authority = "REPLACE_WITH_YOUR_STAKE_AUTHORITY_PUBKEY"
 rpc_url = "https://REPLACE_WITH_YOUR_RPC_ENDPOINT"
@@ -610,7 +615,7 @@ rpc_url = "https://REPLACE_WITH_YOUR_RPC_ENDPOINT"
 # not match this. Change to "devnet" if your rpc_url is a devnet endpoint.
 cluster = "mainnet-beta"
 # Empty disables the delegate action entirely. Opt in by listing vote accounts.
-allowed_vote_accounts = ""
+allowed_vote_accounts = '[]'
 timeout_secs = "10"
 # Optional durable nonce pair. Set BOTH or NEITHER. With them, the built
 # transaction opens with AdvanceNonceAccount and survives a slow approval
