@@ -292,14 +292,25 @@ world tool-plugin {
 }
 ```
 
-We diffed those files against the pinned host tree: `tool.wit`, `types.wit`,
-`logging.wit` and `plugin-info.wit` are byte-identical once line endings are
-normalized, as are `inbound.wit` and `memory.wit`. Four files do not match, and none
-of them is in these plugins' way. `channel.wit` differs, while `sockets.wit` and
+**One file has since been advanced past that pin, deliberately.** `logging.wit`
+now matches `bd8c73f1` on `master` rather than the base pin, because that host
+added a `memory-audit` variant to the log-action enum. Every plugin imports
+`logging`, so a component built against the older enum does not instantiate on a
+current host at all: the linker refuses it with
+`expected enum of 38 names, found 37`, before any code here runs. Adding a case
+to an existing enum breaking previously compiled plugins is the contract this
+project reported upstream, and this is that break met from the other side.
+
+The rest is as vendored. Against the base pin, `tool.wit`, `types.wit` and
+`plugin-info.wit` are byte-identical once line endings are normalized, as are
+`inbound.wit` and `memory.wit`. `channel.wit` differs, while `sockets.wit` and
 `ws-client.wit` exist only in the newer tree; all three belong to worlds these
-plugins do not implement. The fourth is the tree's own `README.md`, which is
-documentation. If you move the host pin forward, re-run that diff before assuming
-the components still load.
+plugins do not implement, and the current host also ships `config.wit` and
+`secrets.wit` that this tree does not carry, for the same reason. If you move the
+host pin forward, re-run that diff before assuming the components still load, and
+remember that `cargo` does not treat this directory as a build input: the
+bindings come from a macro rather than a build script, so a rebuild after a WIT
+change needs the crate source touched first.
 
 ### 3.2 Run the tests before you build anything
 
@@ -584,6 +595,11 @@ shell_env_passthrough = []
 # ---------------------------------------------------------------------------
 [plugins]
 enabled = true
+# REQUIRED on every host newer than the pin, including 0.8.4 and current master:
+# this is the only gate that admits Tool and Skill plugins, and it defaults to
+# false. Without it the daemon starts clean and registers nothing. Inert at the
+# pinned host, so it is safe to set either way. See trap 1.
+auto_discover = true
 
 [[plugins.entries]]
 # The instance key, not the package name. See the note above.
@@ -1068,9 +1084,20 @@ so a correct binary with a correct install still yields no tools until that line
 in the config. And `[channels.telegram.<alias>].enabled` defaults to `false` too,
 which produces a bot that connects to nothing and says nothing.
 
-One key you can ignore: `plugins.auto_discover` exists in the schema and is read by
-nothing in the runtime at this commit. Discovery happens regardless. Setting it
-neither helps nor hurts.
+**`plugins.auto_discover` is the third and worst of these, and which it is depends
+on your host.** At the pinned `fc8b4d83` the runtime reads it nowhere, discovery
+happens regardless, and setting it neither helps nor hurts. From the commit that
+activated logical channel instances onward, including 0.8.4 and current `master`,
+it is the sole gate that admits Tool and Skill plugins, and its schema default is
+`false`. Omit it on such a host and nothing announces the problem: `plugin list`
+prints all three components at v0.2.0, `config list` prints every config value you
+set, `security status` is clean, and the daemon reaches `Listening for messages...`
+while the runtime trace records `discovered: 3, admitted: 0, registered: 0`. The
+agent simply has no Solana tools to call, so every acceptance check in section 7.1
+past the second fails for a reason none of them names.
+
+The template in section 6 carries the line. If you are writing a config by hand
+against any host newer than the pin, `plugins.enabled = true` alone is not enough.
 
 ### Trap 2: the leak detector eats your transaction
 

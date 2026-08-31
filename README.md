@@ -249,13 +249,16 @@ zeroclaw plugin install .
 The `.wasm` must sit beside `manifest.toml` when the installer runs, which is
 why it is copied up from `target/`. Built artifacts are not committed here.
 
-**Match the host to the pin, or the install will succeed and the first tool call
-will not.** A component is bound to the WIT contract of the host that runs it,
-and that contract moved: against `v0.8.4` or current `master` these components
-fail to instantiate with `expected enum of 38 names, found 37`. Either build the
-host at the commit [`REPRODUCE.md`](REPRODUCE.md) pins, or copy that host's
-`wit/v0` into this tree and rebuild, which takes no source change.
-[`REPRODUCE.md`](REPRODUCE.md) carries both paths.
+**These components are built for a current host, and the WIT contract they bind
+is what decides that.** The vendored `wit/v0` here matches `zeroclaw` `v0.8.4`
+and current `master`, so a component built from this tree instantiates there. It
+will not instantiate on the older `fc8b4d83` host that
+[`REPRODUCE.md`](REPRODUCE.md) pins for its recorded captures: that host's
+log-action enum has one variant fewer, and the mismatch surfaces as
+`expected enum of 37 names, found 38` on the first tool call, after an install
+that reported success. Running against the pin therefore needs that host's
+`wit/v0` copied into this tree and a rebuild, which takes no source change.
+[`REPRODUCE.md`](REPRODUCE.md) section 1.1 pairs each version with its host.
 
 Running `plugin install` a second time is refused, never silently ignored:
 

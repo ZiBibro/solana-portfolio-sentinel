@@ -1,3 +1,8 @@
-# Full zeroclaw-labs/zeroclaw commit with byte-identical wit/v0.
-# Advance this pin and wit/v0 together in one reviewed change.
+# Base pin: the zeroclaw-labs/zeroclaw commit this tree was vendored from.
+# NOT byte-identical any more. logging.wit was advanced to bd8c73f1 (master,
+# 2026-08-31) because that host added a log-action enum variant, and a component
+# built against the older enum does not instantiate there. Every other file is
+# still as vendored from the base pin.
+# Advance this pin and wit/v0 together in one reviewed change; where a single
+# file has to move ahead of the pin, say which and why, as the line above does.
 e112ce6b5ccdac9e1cb166bab217e730dd7e24c2
