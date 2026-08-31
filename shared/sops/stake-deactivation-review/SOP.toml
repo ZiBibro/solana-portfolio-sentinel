@@ -1,9 +1,13 @@
 [sop]
 name = "stake-deactivation-review"
-description = "Decide whether a stake account should be deactivated, then build the unsigned transaction. Pauses for operator approval before any bytes exist."
+description = "Decide whether a stake account should be deactivated, then build the unsigned transaction. Every step waits for operator approval, including the build."
 version = "1.0.0"
 priority = "normal"
-execution_mode = "supervised"
+# step_by_step, not supervised. `supervised` gates only step 1: the operator
+# approves once at the start and the run then goes through to the build without
+# stopping again, which is the opposite of what this procedure is for. The whole
+# point is that the readings are seen before anything is built, so each step asks.
+execution_mode = "step_by_step"
 cooldown_secs = 0
 max_concurrent = 1
 agent = "sentinel"

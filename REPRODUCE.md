@@ -998,6 +998,15 @@ copying for the layering lesson: one GET plus arithmetic does not belong in a
 compiled component, and putting it in a skill keeps the component boundary for
 work that actually needs it.
 
+**`http_request` is deliberately absent from the cron job's `allowed_tools`
+above, so `liquidation-price` cannot complete during the scheduled brief.** The
+skill is still loaded and still shapes the wording, but the conversion needs a
+tool the unattended run does not grant, and it falls back to reporting the buffer
+as a percentage. Ask for the price conversion in an interactive session, where
+the built-in tools are available. Adding `http_request` to the scheduled run
+would widen an unattended agent from two read-only readers to arbitrary outbound
+HTTP, which is a trade this setup declines.
+
 Confirm the agent loads them:
 
 ```bash
@@ -1056,13 +1065,19 @@ steps without calling the tool. The `payload` field wants a string that itself
 contains JSON, so the working body is doubly encoded:
 `{"payload":"{\"account\":\"spare\"}"}`.
 
-**A trap that cost us twenty minutes:** a relative `sops_dir` resolves against
-the **process working directory**, not against `--config-dir`. Start the daemon
-from anywhere else and `sop list` cheerfully reports `No SOPs found` with a
-suggestion to create one, which reads exactly like a syntax error in your
-manifest. Either start the daemon from the agent home, or write an absolute path.
-The same does not apply to the skill bundle, which resolves against the install
-root.
+**A trap that cost us twenty minutes, and which the host has since removed.** On
+the pinned `fc8b4d83` host a relative `sops_dir` resolves against the **process
+working directory**, not against `--config-dir`: start the daemon from anywhere
+else and `sop list` cheerfully reports `No SOPs found` with a suggestion to create
+one, which reads exactly like a syntax error in your manifest. Either start the
+daemon from the agent home, or write an absolute path. The skill bundle never
+shared that behaviour; it always resolved against the install root.
+
+On a current host the two now agree: a relative `sops_dir` resolves against the
+install root, the directory holding `config.toml`, so `shared/sops` loads from any
+working directory. Verified here by running `sop list` from a directory with no
+`shared` tree at all, and again from a decoy tree containing a different SOP: both
+loaded the real one. If you are on the pin, the paragraph above still applies.
 
 ---
 
@@ -1313,9 +1328,12 @@ against a directory with no plugins and no cron job, and the only symptom is a
 brief that never arrives. This is the same self-inflicted wound the runbook warns
 about in section 5; the variable name is what causes it here.
 
-The working directory matters: a relative `sops_dir` resolves against it, so a
-task without `-WorkingDirectory` loads zero SOPs and says nothing about it. That
-is the section 7.4 working-directory trap arriving through a different door.
+The working directory matters on the pinned host: there a relative `sops_dir`
+resolves against it, so a task without `-WorkingDirectory` loads zero SOPs and
+says nothing about it. That is the section 7.4 trap arriving through a different
+door. On a current host the path resolves against the install root and the
+argument is no longer load-bearing for SOPs; it is still worth setting so relative
+paths elsewhere behave predictably.
 
 **Linux, as a user service.** `~/.config/systemd/user/zeroclaw.service`:
 

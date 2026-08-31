@@ -18,11 +18,19 @@ compiled code.
 
 ## When to use it
 
-Use it when a position comes back `WARN` or `CRITICAL` and its collateral is SOL
-or an SOL liquid-staking token, and when the operator asks what price would put
-them in trouble. Skip it for a position marked `no debt`, which has no
-liquidation price, and skip it for `UNKNOWN`, where the buffer itself is not
-established.
+Use it when a position comes back `WARN` or `CRITICAL` and the operator asks what
+price would put them in trouble. Skip it for a position marked `no debt`, which
+has no liquidation price, and skip it for `UNKNOWN`, where the buffer itself is
+not established.
+
+**The report does not name the collateral asset, and this conversion only holds
+for collateral that moves with SOL.** `lending_health` prints the protocol, the
+market, the position id and the two LTV figures; it prints no mint and no symbol.
+So do not infer the collateral. Ask the operator which asset backs the position
+before converting, in one short question, and convert only once they have said
+SOL or an SOL liquid-staking token. If they say a stablecoin or a mixed basket,
+or if they do not answer, report the buffer as a percentage and say the price
+conversion does not apply to that collateral.
 
 Do not run it on every position in a healthy report. It costs a network call and
 answers a question nobody asked.
@@ -33,6 +41,13 @@ Use the built-in `http_request` tool. This deliberately does not go through a
 plugin: it is one GET and some arithmetic, which is exactly the work that
 belongs at tier 1. Compiling it into WebAssembly would buy nothing and cost the
 operator a rebuild.
+
+**That tool is granted in interactive sessions, not in the scheduled brief.** The
+documented cron job narrows its run to the two readers, so `http_request` is not
+callable there and this skill cannot complete during it. That is the intended
+shape: an unattended job stays read-only over the operator's own accounts. If
+the tool is unavailable, report the buffer as a percentage and stop, exactly as
+under a failed price lookup below.
 
 ```
 GET https://lite-api.jup.ag/price/v3?ids=So11111111111111111111111111111111111111112
@@ -77,9 +92,9 @@ It does not predict anything and it is not advice. It converts one unit into
 another so the operator can compare a position against a price they already have
 a feeling for.
 
-It also assumes the collateral moves with SOL. When collateral is a stablecoin,
-or a basket, say that the conversion does not apply rather than producing a
-number that looks precise and means nothing.
+It assumes the collateral moves with SOL, and the report cannot confirm that, so
+the operator's answer is what licenses the conversion. Without it, a number that
+looks precise and means nothing is the worse outcome of the two.
 
 ## If the call fails
 

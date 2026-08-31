@@ -27,11 +27,13 @@ persist_runs = true
 Omitting `directory` under the bundle is deliberate: it resolves to
 `<install>/shared/skills/<bundle>/`, which is where these files now are.
 
-**One trap.** A relative `sops_dir` resolves against the **process working
-directory**, not against `--config-dir`. Start the daemon from anywhere else and
-`zeroclaw sop list` reports `No SOPs found` and suggests creating one, which
-reads exactly like a broken manifest. Either start the daemon from the install
-root or write an absolute path. The skill bundle does not share this behaviour.
+**One trap, on the pinned host only.** There a relative `sops_dir` resolves
+against the **process working directory**, not against `--config-dir`: start the
+daemon from anywhere else and `zeroclaw sop list` reports `No SOPs found` and
+suggests creating one, which reads exactly like a broken manifest. Either start
+the daemon from the install root or write an absolute path. The skill bundle never
+shared that behaviour. On a current host both resolve against the install root,
+so `shared/sops` loads from any working directory.
 
 ## skills/solana-sentinel/morning-triage
 

@@ -10,6 +10,11 @@ single tool call.
 The procedure gathers the two readings the decision rests on, stops for the
 operator, and only then builds anything. Nothing here signs or submits.
 
+It runs `step_by_step`, so the host asks before every step rather than once at
+the start. That is deliberate: an approval taken before any reading exists is an
+approval of nothing, and the decision this procedure exists to support is the one
+made after the readings are in front of the operator.
+
 ## Steps
 
 1. **Read the stake** — Call `stake_monitor` and report the account named by the
