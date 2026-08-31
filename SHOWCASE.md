@@ -83,7 +83,7 @@ Both reports are capped at 900 characters: dense facts, no prose. Shaping output
 
 **Whose accounts these are.** The stake accounts are mine: I created and funded them on devnet, then delegated them with keys I hold, and every delegation lifecycle state in the reports above was observed on them. The transactions the builder produces were accepted by a real Solana runtime, which is the half of this system where custody mechanics actually get proven.
 
-The lending side carries my own debt. The `own` line is a mainnet Kamino position on the SOL/BTC market opened for this system, wallet `5BqYh848cGwSUXapu5rqMmFEDpNXXG8hQipK6F71zvWS`: 0.3 SOL of collateral against 5 USDC borrowed, opened at 23.3% of its 75% liquidation line and printing 22.6% in the morning brief on 4 August. That figure moves with the SOL price, which is the point: the brief reprints it every morning, so the number never freezes at the value it had on opening day. Both transactions are on chain, the deposit at `5c8RyMPG…` and the borrow at `4w7dsihH…`. It is a small position on purpose; the point is that the number the agent reports every morning is a number I am actually exposed to.
+The lending side carries my own debt. The `own` line is a mainnet Kamino position on the SOL/BTC market opened for this system, wallet `5BqYh848cGwSUXapu5rqMmFEDpNXXG8hQipK6F71zvWS`: 0.3 SOL of collateral against 5 USDC borrowed, opened at 23.3% of its 75% liquidation line and printing 22.6% in the morning brief on 4 August. That figure moves with the SOL price, which is the point: the brief reprints it every morning, so the number never freezes at the value it had on opening day. Both transactions are on chain, the deposit at `5c8RyMPG…` and the borrow at `4w7dsihH…`. It is a small position on purpose; the point is that the number the agent reported every morning was a number I was actually exposed to. The position was open from 2 August to 31 August 2026 and is now closed; the update at the end of this document carries the closing transactions.
 
 The other wallets stay in the allowlist as watched addresses, and they earn their place: they carry positions large enough that a real liquidation line exercises the reader in ways a $22 position cannot, and their arithmetic is worth checking against a case that hurts. The report labels each line by which wallet it came from, so nothing implies a debt I do not carry.
 
@@ -497,3 +497,17 @@ common. The `Position` type is deliberately narrow for that reason.
 - **CI:** [every run on `main`](https://github.com/ZiBibro/solana-portfolio-sentinel/actions/workflows/ci.yml?query=branch%3Amain). Deliberately not a link to one run: this file lives in the repository, so pinning a run id here would go stale on the very commit that updates it.
 
 A note on the registry. My pull request to `zeroclaw-plugins` has been open since 18 July, predating the 22 July guidance to keep code in your own repo during the bounty. On 1 August I moved it to draft with a comment explaining the timing, so it sits out of the review queue for the duration without losing its history. The standalone repository above is the code this showcase submits.
+
+
+**Update, 31 August 2026: the position this write-up reports on is closed.** The
+paragraph above describes it in the past tense for that reason. Both legs are on
+chain in the wallet named there, in the order the procedure requires: 6.5279 USDC
+repaid at 17:19:25Z, then 0.3313 SOL of collateral withdrawn at 17:19:52Z. The
+deposit was 0.3 SOL against 5 USDC borrowed, so both sides came back larger by
+the interest the month accrued. The wallet now holds no Kamino obligation.
+
+What that does and does not change. The morning brief in [What a run looks like](#what-a-run-looks-like)
+was captured while the position was live, and every figure in it stands as
+recorded. The `own` line will not appear in a fresh run, because the account it
+described no longer exists; the six watched public addresses on the other lines
+are unaffected, and the reader that produced them is unchanged.
