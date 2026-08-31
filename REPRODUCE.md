@@ -293,7 +293,8 @@ world tool-plugin {
 ```
 
 **One file has since been advanced past that pin, deliberately.** `logging.wit`
-now matches `bd8c73f1` on `master` rather than the base pin, because that host
+now matches the plugin registry's own `wit/v0`, which its PR #154 advanced, rather
+than the base pin, because the current host
 added a `memory-audit` variant to the log-action enum. Every plugin imports
 `logging`, so a component built against the older enum does not instantiate on a
 current host at all: the linker refuses it with

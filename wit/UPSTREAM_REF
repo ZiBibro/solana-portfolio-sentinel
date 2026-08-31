@@ -1,8 +1,12 @@
-# Base pin: the zeroclaw-labs/zeroclaw commit this tree was vendored from.
-# NOT byte-identical any more. logging.wit was advanced to bd8c73f1 (master,
-# 2026-08-31) because that host added a log-action enum variant, and a component
-# built against the older enum does not instantiate there. Every other file is
-# still as vendored from the base pin.
-# Advance this pin and wit/v0 together in one reviewed change; where a single
-# file has to move ahead of the pin, say which and why, as the line above does.
+# Full zeroclaw-labs/zeroclaw commit with byte-identical wit/v0, except for
+# logging.wit, which tracks the plugin registry instead.
+#
+# The registry advanced its own wit/v0 in zeroclaw-labs/zeroclaw-plugins#154 and
+# now pins cbf88733605e2827ee491758d29eaa4486b2940c. That change added the
+# log-action variant a current host requires: a component built against the older
+# enum is refused by the linker before it runs. Since these packages are submitted
+# to that registry, logging.wit here is the registry's copy verbatim.
+#
+# Advance this pin and wit/v0 together in one reviewed change; where a single file
+# tracks a different source, say which and why, as the lines above do.
 e112ce6b5ccdac9e1cb166bab217e730dd7e24c2
