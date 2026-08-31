@@ -14,7 +14,7 @@ byte-exact transaction goldens. Drop `--no-wasm` and it also builds the three
 components and prints their byte sizes with a sha256 prefix. Every number comes
 out of that run; nothing in the output is typed by hand. A run on 30 August 2026
 printed 241 tests passed, 59 of them on refusal and unknown paths, and three
-components at 400264, 354078 and 380649 bytes.
+components at 400277, 354091 and 380662 bytes.
 
 241 tests and no wasm toolchain needed for the `--no-wasm` path. The tests
 themselves reach no network; cargo still fetches the pinned dependencies once.

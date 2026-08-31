@@ -311,6 +311,26 @@ end-to-end test before the handshake with `os error 10054`. The repository's own
 identically, on unmodified `master`. That is the quiet CI trap #9653 described,
 met from the other side while fixing it.
 
+**Update, 31 August 2026: the packages did not run on a current host, and now do.**
+Driving each component through the real runtime on a host built from upstream
+`master` failed at instantiation, before any config or code of ours ran:
+
+```
+component imports instance `zeroclaw:plugin/logging@0.1.0`, but a matching
+implementation was not found in the linker: instance export `log-record` has the
+wrong type: type mismatch for field action: expected enum of 38 names, found 37
+```
+
+The host added a variant to the log-action enum after these components were
+compiled, and the vendored `wit/v0` copy they bind against still had the older
+one. This is the same breakage the versioning report filed upstream describes:
+adding a case to an existing enum breaks previously compiled plugins. The
+vendored interface is now aligned with the host's and all three components are
+rebuilt against it. Each one then instantiates, receives its typed config, and
+runs: `lending-health` returns a live Kamino position, and the other two reach
+their RPC call and fail only because the probe pointed them at an unreachable
+endpoint. Component sizes moved with the rebuild and are re-measured above.
+
 **Update, 31 August 2026: the liquidation-price skill said the wrong arithmetic.**
 The paragraph above notes that the `7.0% buffer` in the Telegram line is the
 model's own subtraction rather than the plugin's basis. The skill file was the
