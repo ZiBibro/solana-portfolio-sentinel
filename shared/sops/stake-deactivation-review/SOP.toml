@@ -3,10 +3,14 @@ name = "stake-deactivation-review"
 description = "Decide whether a stake account should be deactivated, then build the unsigned transaction. Every step waits for operator approval, including the build."
 version = "1.0.0"
 priority = "normal"
-# step_by_step, not supervised. `supervised` gates only step 1: the operator
-# approves once at the start and the run then goes through to the build without
-# stopping again, which is the opposite of what this procedure is for. The whole
-# point is that the readings are seen before anything is built, so each step asks.
+# step_by_step, not supervised. Under `supervised` the engine gates step 1 and
+# nothing else (`execution_mode_needs_approval` returns `step.number == 1`).
+# Step 3 held anyway, because `step_requires_approval_gate` returns true on
+# `requires_confirmation` before it looks at the mode at all, so the readings
+# were always seen before a build. What supervised left open is the build
+# itself: once the checkpoint was cleared, step 4 called `stake_tx_build` with
+# no gate of its own. This mode closes that, at the cost of one approval per
+# step.
 execution_mode = "step_by_step"
 cooldown_secs = 0
 max_concurrent = 1

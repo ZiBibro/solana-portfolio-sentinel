@@ -74,12 +74,17 @@ one an operator reaches for under pressure, when a loan needs collateral and the
 stake is the only liquidity in reach. That combination earns a procedure.
 
 Five steps: read the stake, read the debt side, **stop**, build, hand off. The
-checkpoint sits at step three rather than as a confirmation on step four, and
-the difference is the whole point. An approval attached to the build step asks
-the operator to approve a tool call whose arguments are already chosen. A
-checkpoint before it asks them to approve the decision, with both readings on
-screen and nothing constructed yet. The run pauses there until a human advances
-it, and the pause is recorded in the audit trail under the run id.
+procedure declares `execution_mode = "step_by_step"`, so the host raises an
+approval gate before every one of those five, the build included, and each pause
+is recorded in the audit trail under the run id.
+
+Step three carries `kind: checkpoint` and `requires_confirmation: true` on top of
+that, which is what makes its gate independent of the mode: the engine honours
+`requires_confirmation` before it consults the execution mode at all, so relaxing
+the mode later leaves this one pause standing. Its position is the point. An
+approval attached to the build step asks the operator to approve a tool call
+whose arguments are already chosen; a gate before it asks them to approve the
+decision, with both readings on screen and nothing constructed yet.
 
 Per-step tool scopes keep the reading steps away from the builder. With
 `step_scope_enforce = true` those scopes are enforced filters rather than hints.
@@ -98,9 +103,15 @@ on the pinned host asking the agent in the channel did not start a run in three
 consecutive attempts: `sop_execute` appears zero times in the trace for all
 three, and naming the procedure by id gets the message killed by the reply-intent
 precheck first. What worked is the host's HTTP gateway, `POST /pair` followed by
-`POST /api/sops/stake-deactivation-review/run`. The checkpoint is then advanced
-with `sop approve` on the CLI or `POST /admin/sop/approve`, never from the
-messenger. [`REPRODUCE.md`](../REPRODUCE.md) section 7.4 carries the exact calls.
+`POST /api/sops/stake-deactivation-review/run`.
+
+Then expect five gates, not one. The run parks before step one with nothing read
+yet, and each gate is cleared with `zeroclaw sop approve <run-id>` on the CLI or
+`POST /admin/sop/approve`, never from the messenger. The loop is `sop pending` to
+see the waiting run, `sop approve <run-id>`, repeat until `sop pending` reports
+nothing waiting. A run that looks stalled immediately after the POST is usually a
+run waiting on its first gate.
+[`REPRODUCE.md`](../REPRODUCE.md) section 7.4 carries the exact calls.
 
 The daily brief is a top-level `[cron.*]` job rather than a cron-triggered SOP.
 That split is deliberate and is documented with the full config in

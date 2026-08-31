@@ -1,9 +1,26 @@
-# Full zeroclaw-labs/zeroclaw commit with byte-identical wit/v0, except for
-# logging.wit, which tracks the plugin registry instead.
+# zeroclaw-labs/zeroclaw commit whose wit/v0 this directory copies byte for byte,
+# except for logging.wit, which tracks the plugin registry instead.
+#
+# READ THIS BEFORE DIFFING AGAINST THE PIN. This commit is not on the project's
+# mainline. Measured 2026-08-31 through the GitHub compare API, it is diverged
+# from master: 78 commits ahead, 647 behind, and no pull request contains it. A
+# diff of this directory against the pin therefore reports almost nothing while
+# master keeps moving, which is the opposite of what such a diff is usually for.
+# Diff against the host you actually intend to run.
+#
+# What that costs, measured the same day against origin/master. This tree carries
+# sockets.wit and ws-client.wit, which master does not; master carries config.wit
+# and secrets.wit, which this tree does not; and README.md, channel.wit,
+# inbound.wit, logging.wit and tool.wit differ. None of it reaches the components.
+# They bind `world tool-plugin`, which imports logging alone, and our logging.wit
+# differs from master's by one doc comment while carrying the identical 38-name
+# plugin-action enum. Master's tool-plugin world additionally imports secrets,
+# which a component is free to leave unused. Against the v0.8.4 tag only README.md
+# and channel.wit differ, plus the two files listed above.
 #
 # The registry advanced its own wit/v0 in zeroclaw-labs/zeroclaw-plugins#154 and
 # now pins cbf88733605e2827ee491758d29eaa4486b2940c. That change added the
-# log-action variant a current host requires: a component built against the older
+# plugin-action variant a current host requires: a component built against the older
 # enum is refused by the linker before it runs. Since these packages are submitted
 # to that registry, logging.wit here is the registry's copy verbatim.
 #

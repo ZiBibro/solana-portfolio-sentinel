@@ -74,8 +74,9 @@ for p in "${PLUGINS[@]}"; do
   i=$(( i + 1 ))
 done
 row "total" "$refusal_total of $total_passed"
-# Two public documents advertise this figure, so a `--list` that silently stops
-# working must fail the run rather than print a confident zero.
+# Three public documents advertise this figure (README, SHOWCASE and the
+# injection-drill notes), so a `--list` that silently stops working must fail the
+# run rather than print a confident zero.
 if [[ "$refusal_total" == "0" ]]; then
   echo "FAILED: the refusal filter matched nothing; --list output changed shape?"
   exit 1

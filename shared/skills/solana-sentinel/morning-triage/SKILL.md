@@ -27,9 +27,9 @@ call again rather than answering from what you already said. The chain moved.
 Each position line carries a current LTV and the liquidation line that belongs
 to that position. The number that matters is the distance between them, not the
 LTV on its own. A position at 66% is in danger when its line sits at 65%, and a
-position at 82% is comfortable when its line sits at 95%. The plugin already
+position at 70% is comfortable when its line sits at 95%. The plugin already
 does this arithmetic and hands you a verdict per position. Trust the verdict,
-and quote the pair when you explain it.
+and quote the pair on the lines that print one.
 
 `no debt` means the position carries collateral and no borrow. That is the
 safest state there is. Never describe it as stale, unknown, or unmeasurable.
@@ -37,6 +37,13 @@ safest state there is. Never describe it as stale, unknown, or unmeasurable.
 `UNKNOWN` means a number the verdict depends on could not be read. Say that
 plainly. Do not guess a verdict from the figures that did parse, and do not
 smooth it over with a reassuring sentence.
+
+`LTV n/a` means no liquidation basis was readable, so the line prints no ratio at
+all. The same rendering arrives under two different verdicts. On an `[UNKNOWN]`
+line it is the absence of a verdict: say so and stop. On a `[CRITICAL]` line the
+verdict came from the protocol's own health flag and stands without a basis of
+ours: say that, quote the marker in parentheses, and never derive a ratio from
+the deposit and borrow dollars on the same line.
 
 A line prefixed `maint LTV` is measured on MarginFi's maintenance-weighted
 basis, while its dollar figures come from the program's initial-weight pair.

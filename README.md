@@ -12,9 +12,10 @@ It prints counts instead of a green tick: host tests passed per component, how
 many of those tests cover a refusal or an unknown path, and the names of the
 byte-exact transaction goldens. Drop `--no-wasm` and it also builds the three
 components and prints their byte sizes with a sha256 prefix. Every number comes
-out of that run; nothing in the output is typed by hand. A run on 30 August 2026
-printed 241 tests passed, 59 of them on refusal and unknown paths, and three
-components at 400277, 354091 and 380662 bytes.
+out of that run; nothing in the output is typed by hand. A run on 31 August 2026,
+after the components were rebuilt against the host's current contract, printed
+241 tests passed, 59 of them on refusal and unknown paths, and three components
+at 400277, 354091 and 380710 bytes.
 
 241 tests and no wasm toolchain needed for the `--no-wasm` path. The tests
 themselves reach no network; cargo still fetches the pinned dependencies once.
@@ -250,11 +251,13 @@ The `.wasm` must sit beside `manifest.toml` when the installer runs, which is
 why it is copied up from `target/`. Built artifacts are not committed here.
 
 **These components are built for a current host, and the WIT contract they bind
-is what decides that.** The vendored `wit/v0` here matches `zeroclaw` `v0.8.4`
-and current `master`, so a component built from this tree instantiates there. It
+is what decides that.** They bind `world tool-plugin`, which imports `logging`
+alone, and the vendored `logging.wit` here carries the same 38-name
+`plugin-action` enum as `zeroclaw` `v0.8.4` and current `master`, so a component
+built from this tree instantiates on both. It
 will not instantiate on the older `fc8b4d83` host that
 [`REPRODUCE.md`](REPRODUCE.md) pins for its recorded captures: that host's
-log-action enum has one variant fewer, and the mismatch surfaces as
+plugin-action enum has one variant fewer, and the mismatch surfaces as
 `expected enum of 37 names, found 38` on the first tool call, after an install
 that reported success. Running against the pin therefore needs that host's
 `wit/v0` copied into this tree and a rebuild, which takes no source change.

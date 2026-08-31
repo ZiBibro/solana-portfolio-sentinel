@@ -6,12 +6,15 @@ wit/
   v0/                 ← zeroclaw:plugin@0.x (experimental → stable)
     .frozen           ← created when v0 stabilizes; absent = experimental
     channel.wit
+    inbound.wit
     logging.wit
     memory.wit
     plugin-info.wit
     README.md
+    sockets.wit
     tool.wit
     types.wit
+    ws-client.wit
   v1/                 ← (future) breaking changes → zeroclaw:plugin@1.0.0
 ```
 

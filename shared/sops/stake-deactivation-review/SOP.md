@@ -52,12 +52,17 @@ made after the readings are in front of the operator.
 
 ## Why the checkpoint sits where it does
 
-Step 3 is a checkpoint rather than a confirmation on step 4, and the difference
-matters. An approval attached to the build step asks the operator to approve a
-tool call, at a moment when the arguments are already chosen. A checkpoint
-before it asks them to approve the decision, while both readings are on screen
-and nothing has been constructed. The run pauses there until a human advances
-it, and the pause is recorded in the audit trail under the run id.
+The mode already raises a gate before every step, so all five pauses are the
+operator's. What step 3 adds is a gate that does not depend on the mode: it
+declares `kind: checkpoint` and `requires_confirmation: true`, and the engine
+honours `requires_confirmation` before it consults the execution mode at all.
+Relax the mode later and this one pause still holds.
+
+Where it sits matters as much as that it holds. An approval attached to the
+build step asks the operator to approve a tool call, at a moment when the
+arguments are already chosen. A gate before it asks them to approve the
+decision, while both readings are on screen and nothing has been constructed.
+Every pause is recorded in the audit trail under the run id.
 
 The step scopes are declared per step, so the readers cannot reach the builder
 and the builder runs only after the pause. With `step_scope_enforce = true` in

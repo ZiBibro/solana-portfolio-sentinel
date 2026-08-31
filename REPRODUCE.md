@@ -99,11 +99,11 @@ $ ./target/release/zeroclaw.exe --version
 zeroclaw 0.8.3
 ```
 
-**The pin is load-bearing, and we can now say exactly why.** The plugin WIT
+**The WIT contract is load-bearing, and we can now say exactly why.** The plugin
 contract in `wit/v0` carries no `.frozen` marker, so the interface is allowed to
-move under you, and it has. On 2026-08-01 we built the host from `origin/master`
-at `cc92c86`, 204 commits past the pin, and pointed it at the same three
-components this repository ships. They do not load at all:
+move under you, and it has. On 2026-08-01, with this repository at `9dbf85b`, we
+built the host from `origin/master` at `cc92c86`, 204 commits past the pin, and
+pointed it at the three components that tree shipped. They did not load at all:
 
 ```
 failed to instantiate tool plugin: component imports instance
@@ -120,17 +120,24 @@ what this looks like from the outside: `zeroclaw plugin list` still prints all
 three plugins, because those descriptions come from `manifest.toml` rather than
 from the component. The failure appears only when a tool is actually invoked.
 
-**This is no longer only a `master` problem.** ZeroClaw `v0.8.4` was released at
-midnight on 2026-08-03, and the tag carries the same change: `git diff
-fc8b4d83 v0.8.4 -- wit/v0` returns exactly two files, `logging.wit` with the
-added `memory-audit` variant and `channel.wit` with two doc comments rewritten.
-So an operator who installs the current release today and skips the pin lands on
-the failure above. The pin, or the rebuild recipe below, is the whole fix.
+**That break reached the release too.** ZeroClaw `v0.8.4` was tagged on
+2026-08-03 and carries the same change: `git diff fc8b4d83 v0.8.4 -- wit/v0`
+returns exactly two modified files, `logging.wit` with the added `memory-audit`
+variant and `channel.wit` with two doc comments rewritten. Re-measured on
+2026-08-31 against the host clone, and still exactly those two.
+
+**Which way the mismatch now points, because this tree has since moved.** The
+vendored `wit/v0/logging.wit` here carries the 38-name `plugin-action` enum, so
+components built from current `main` instantiate on `v0.8.4` and on `master`, and
+it is the pinned `fc8b4d83` host that refuses them, with the same error read the
+other way round: `expected enum of 37 names, found 38`. An operator on a current
+release needs no rebuild. An operator who builds the pinned host for the recorded
+captures does, and 1.1 below says which plugin version pairs with which host.
 
 ### 1.1 What the pin means for plugin version 0.2.0
 
 Read this before installing if you are on the `main` branch of this repository
-rather than on commit `1158595`.
+rather than on commit `9dbf85b`.
 
 Version 0.2.0 of the three plugins declares a `config_schema` in each
 `manifest.toml` and consumes a typed `__config` object, because
@@ -154,19 +161,28 @@ So the pin and the plugin version have to move together:
 
 | plugin version | host to build | state |
 |---|---|---|
-| 0.1.0, this repository at `1158595` | `fc8b4d83` | the combination the demo and every capture in this document were produced on |
+| 0.1.0, this repository at `9dbf85b` | `fc8b4d83` | the combination the demo and every capture in this document were produced on |
 | 0.2.0, current `main` | any commit carrying #9126, merged 2026-08-20 | the combination a current ZeroClaw accepts |
 
-**Honest limit on that second row.** This session migrated the plugins and ran
-every host-side gate on them, and it did not build a post-#9126 host, so the
-end-to-end capture in section 3 below still shows the 0.1.0 output. Treat the
-second row as the requirement the host states, rather than as something these
-notes have watched run.
+**What the second row has actually been watched doing.** Each component was
+driven through the real runtime on a host built from upstream `master`. The first
+attempt failed at instantiation on the enum above, before any config or code of
+ours ran; after the vendored contract was aligned and the three crates rebuilt,
+all three instantiated and received their typed config. `lending-health` returned
+a live Kamino position. The honest limit left is narrower than it was: the other
+two reached their RPC call and failed there only because the probe pointed them
+at an unreachable endpoint, so their tool output on a current host is still
+unwatched. The end-to-end capture in section 7 was recorded on the 0.1.0 pairing
+and is left as recorded.
 
-**If you built the pinned commit, nothing here affects you.** Skip to section 3.
+**If you built the pinned `fc8b4d83` host,** this section is the one that
+concerns you most, because the components on `main` will not load there. Check
+out `9dbf85b` when you reach section 3, or copy the pinned host's contract into
+this repository and rebuild with the recipe below.
 
-**If you already built a newer host,** you do not need a different version of
-this code. Copy that host's contract into this repository and rebuild:
+**If you built a current host,** you need no rebuild and no different version of
+this code. The recipe below is here for whenever you move the host again; it
+copies the host's contract into this repository and rebuilds:
 
 ```bash
 cp -r ../zeroclaw/wit/v0 ./wit/
@@ -255,15 +271,29 @@ subcommand` error means the feature flag did not take.
 
 ## 3. Get the plugin source
 
-Leave the host checkout first, so the two clones end up as siblings. The rebuild
-recipe in 3.1 reaches the host as `../zeroclaw`, which only resolves in that
-layout:
+Leave the host checkout first, so the two clones end up as siblings. Two later
+steps reach the host by relative path and only resolve in that layout: the
+rebuild recipe in 1.1, which copies `../zeroclaw/wit/v0`, and the `PATH` line
+just below.
 
 ```bash
 cd ..
 git clone https://github.com/ZiBibro/solana-portfolio-sentinel
 cd solana-portfolio-sentinel
 ```
+
+**Then pick the branch that pairs with the host you built in section 2.** A bare
+clone lands on `main`, which is plugin version 0.2.0 and needs a host carrying
+[#9126](https://github.com/zeroclaw-labs/zeroclaw/pull/9126). If you built the
+pinned `fc8b4d83` host, check out the last 0.1.0 commit instead:
+
+```bash
+git checkout 9dbf85b   # 0.1.0, pairs with the pinned fc8b4d83 host
+```
+
+Section 1.1 carries the pairing table and says what goes wrong when the two
+halves are mismatched. Skipping this step is the one way to run the whole runbook
+top to bottom and still end on a combination the document says does not work.
 
 Every later section calls the host as a bare `zeroclaw`. It was built in step 2
 and is not on your PATH, so put it there once, or keep the full path in a
@@ -295,23 +325,38 @@ world tool-plugin {
 **One file has since been advanced past that pin, deliberately.** `logging.wit`
 now matches the plugin registry's own `wit/v0`, which its PR #154 advanced, rather
 than the base pin, because the current host
-added a `memory-audit` variant to the log-action enum. Every plugin imports
+added a `memory-audit` variant to the plugin-action enum. Every plugin imports
 `logging`, so a component built against the older enum does not instantiate on a
 current host at all: the linker refuses it with
 `expected enum of 38 names, found 37`, before any code here runs. Adding a case
 to an existing enum breaking previously compiled plugins is the contract this
 project reported upstream, and this is that break met from the other side.
 
-The rest is as vendored. Against the base pin, `tool.wit`, `types.wit` and
-`plugin-info.wit` are byte-identical once line endings are normalized, as are
-`inbound.wit` and `memory.wit`. `channel.wit` differs, while `sockets.wit` and
-`ws-client.wit` exist only in the newer tree; all three belong to worlds these
-plugins do not implement, and the current host also ships `config.wit` and
-`secrets.wit` that this tree does not carry, for the same reason. If you move the
-host pin forward, re-run that diff before assuming the components still load, and
-remember that `cargo` does not treat this directory as a build input: the
-bindings come from a macro rather than a build script, so a rebuild after a WIT
-change needs the crate source touched first.
+The rest is as vendored: against the base pin every other file is byte-identical
+once line endings are normalized, which is what makes `logging.wit` the single
+deliberate exception.
+
+**Diff against the host, not against the base pin.** The base pin is not on the
+project's mainline. Measured on 2026-08-31 through the GitHub compare API it is
+diverged from `master`, 78 commits ahead and 647 behind, with no pull request
+containing it, so a diff against it keeps reporting nothing while the host moves.
+Against `origin/master` on that date this tree carries `sockets.wit` and
+`ws-client.wit`, which master does not; master carries `config.wit` and
+`secrets.wit`, which this tree does not; and `README.md`, `channel.wit`,
+`inbound.wit`, `logging.wit` and `tool.wit` differ.
+
+None of that reaches these components. They bind `world tool-plugin`, which
+imports `logging` alone, and our `logging.wit` differs from master's by one doc
+comment while carrying the identical 38-name `plugin-action` enum. Master's
+`tool-plugin` additionally imports `secrets`, and a component is free to leave a
+host-offered import unused. The other files belong to worlds these plugins do not
+implement. Against the `v0.8.4` tag only `README.md` and `channel.wit` differ,
+plus the two files this tree carries and the tag does not.
+
+If you move the host forward, re-run that diff against the new host before
+assuming the components still load, and remember that `cargo` does not treat this
+directory as a build input: the bindings come from a macro rather than a build
+script, so a rebuild after a WIT change needs the crate source touched first.
 
 ### 3.2 Run the tests before you build anything
 
@@ -477,8 +522,16 @@ Error: plugin 'stake-monitor' not found in registry
 ## 6. The config file
 
 Write this to `$ZC_HOME/config.toml`. Every placeholder in capitals is yours to
-replace; nothing else needs changing to get a first run. This template was parsed
-and validated by the pinned host before being published here (see 6.3).
+replace; nothing else needs changing to get a first run.
+
+This template is the 0.2.0 form, and it was last exercised on a host built from
+current upstream `master`: the entries were seeded by installing all three
+packages into a clean config directory and read back from what the installer
+wrote, and `plugins.auto_discover` was measured there, admitting zero tools
+without it and three with it. The structural checks in 6.3 were recorded earlier,
+on the pinned host against the 0.1.0 template. Their four commands read no plugin
+entry, so their output is unchanged by the block below, but they have not been
+re-run since the entries changed.
 
 ```toml
 schema_version = 3
@@ -714,7 +767,9 @@ zeroclaw --config-dir "$ZC_HOME" security status --agent sentinel
 zeroclaw --config-dir "$ZC_HOME" config list --filter security
 ```
 
-What a correct setup prints (verified against the template above on a clean home):
+What a correct setup prints (recorded on a clean home against the earlier 0.1.0
+template on the pinned host; these four commands read no plugin entry, so the
+0.2.0 template above does not change what they print):
 
 ```
 true
@@ -1030,20 +1085,33 @@ step_scope_enforce = true
 persist_runs = true
 ```
 
-The five steps read the stake, read the debt side, then stop at a checkpoint with
-both readings written into the run record. Only after a human advances the run does
-step 4 build anything. We watched that hold on 2026-08-02: the checkpoint went into
-`waiting_approval` at 18:02:32 and stayed there until the operator advanced it at
-about 18:04, after which `stake_tx_build` ran at 18:04:35. No transaction bytes
-existed before it. Per-step tool scopes mean the reading steps cannot reach the
-builder, and `step_scope_enforce = true` turns those scopes from hints into
-enforced filters.
+The SOP declares `execution_mode = "step_by_step"`, so the run raises an approval
+gate before every one of its five steps. It parks before step 1 with nothing read
+yet, and the build in step 4 has a gate of its own. Step 3 additionally declares
+`kind: checkpoint` and `requires_confirmation: true`, which the engine honours
+before it consults the execution mode at all, so that one pause holds whatever the
+mode says and it holds with both readings already written into the run record.
+No transaction bytes exist before it. Per-step tool scopes mean the reading steps
+cannot reach the builder, and `step_scope_enforce = true` turns those scopes from
+hints into enforced filters.
 
-**Know where that checkpoint is not.** It has no channel delivery. Nothing arrives
+The timing we captured on 2026-08-02 was taken while the SOP still declared
+`supervised`: the checkpoint went into `waiting_approval` at 18:02:32 and stayed
+there until the operator advanced it at about 18:04, after which `stake_tx_build`
+ran at 18:04:35. Under `supervised` the engine gated step 1 and the checkpoint and
+released step 4 directly, which is what that last transition records. A fresh run
+against the shipped SOP gates step 4 as well, so expect one more approval there
+than the capture shows.
+
+**Know where those gates are not.** They have no channel delivery. Nothing arrives
 in Telegram, and no approval card appears there: the card you have seen belongs to
-the tool gate, which is a different mechanism. A SOP run is advanced from the CLI
-with `sop approve`, or over HTTP with `POST /admin/sop/approve`. An operator who set
-this up as a messenger agent and waits in the messenger waits forever.
+the tool gate, which is a different mechanism. Each gate is cleared from the CLI
+with `zeroclaw sop approve <run-id>`, or over HTTP with `POST /admin/sop/approve`.
+The loop is `sop pending` to see the waiting run, `sop approve <run-id>`, repeat
+until `sop pending` reports nothing waiting; five steps means five passes through
+it. An operator who set this up as a messenger agent and waits in the messenger
+waits forever, and one who clears a single gate and walks away is left with a run
+parked before the next step.
 
 Validate before you rely on it:
 
@@ -1508,14 +1576,21 @@ Build it (verified; it finished in 4.41 s against a warm host target):
 cargo build --release -p zeroclaw-plugins --example exec_tool --features plugins-wasm-cranelift
 ```
 
-Use it to discover config keys, as section 6.1 does, or to reproduce a failure with
-one command instead of a whole conversation:
+Use it to reproduce a failure with one command instead of a whole conversation.
+Appendix A is the key reference since 0.2.0, not a provoked error: the host
+validates each entry against the manifest schema before the component runs, so
+the guest never sees a stray key, and `exec_tool` bypasses that validation
+entirely rather than reporting on it.
+
+`__config` is passed as real JSON here, so a list key is a JSON array rather than
+a quoted string. That is the opposite of `config.toml`, where every value is a
+string that must contain valid JSON.
 
 ```bash
 ./target/release/examples/exec_tool \
   "$ZC_HOME/plugins/stake-monitor/stake_monitor.wasm" \
   '{}' \
-  '{"stake_accounts":"main:YOUR_PUBKEY","rpc_url":"https://YOUR_ENDPOINT"}'
+  '{"stake_accounts":["main:YOUR_PUBKEY"],"rpc_url":"https://YOUR_ENDPOINT"}'
 ```
 
 Note the argument order: arguments first, config second. `stake-tx-build` validates
@@ -1526,6 +1601,14 @@ its arguments before its config, so probe it with a real action rather than `{}`
   "$ZC_HOME/plugins/stake-tx-build/stake_tx_build.wasm" \
   '{"action":"deactivate","stake_account":"main"}' \
   '{"bogus":"1"}'
+```
+
+That second probe shows the ordering rather than a list of valid keys. `RawConfig`
+carries `#[serde(default)]` and no `deny_unknown_fields`, so `bogus` is
+deserialized away in silence and the first required-key check fires instead:
+
+```
+config key `stake_accounts` is required: an allowlist array like ["main:<pubkey>"] or bare pubkeys
 ```
 
 ---

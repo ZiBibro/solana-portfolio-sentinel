@@ -121,7 +121,7 @@ to = "<your chat id>"
 
 Two readers and one builder, each a `wasm32-wasip2` component in the `plugins/redact-text` layout: pure core with a thin wasm shim, host-run tests that touch no live network. 241 host tests, `clippy -D warnings` clean on both targets.
 
-`lending-health` reads Kamino over REST and decodes MarginFi accounts from chain state, 2312 raw bytes with `i80f48` fixed-point at four offsets, gated on the program's own `ENGINE_OK` flag. The liquidation buffer follows Kamino's own norm, `(liquidation_ltv - ltv) / liquidation_ltv`, and the warning thresholds compare against that relative form. The `7.0% buffer` in the Telegram line above is the model's own subtraction, 79.9 minus 72.9 in percentage points, which measures the same gap on a different basis.
+`lending-health` reads Kamino over REST and decodes MarginFi accounts from chain state, 2312 raw bytes with `i80f48` fixed-point at four offsets, gated on the program's own `ENGINE_OK` flag. The liquidation buffer follows Kamino's own norm, `(liquidation_ltv - ltv) / liquidation_ltv`, and the warning thresholds compare against that relative form. The `7.0% buffer` in the Telegram line above is the model's own subtraction, 79.9 minus 72.9 in percentage points. That is not the basis the plugin publishes and not the one Kamino uses: the same pair divides to a 8.8% relative buffer, and the skill was corrected on 31 August 2026 to derive it by division for exactly this reason.
 
 `stake-monitor` merges four RPC methods across the configured accounts into two lines: delegation lifecycle, validator delinquency with vote lag, epoch progress, and the previous epoch's reward.
 
@@ -226,7 +226,7 @@ The Kamino half depends on Kamino's public REST API, an availability and integri
 
 ## On thin wrappers
 
-The spec rejects a single RPC call padded into WASM, and that test is quantitative. `stake-monitor` merges four RPC methods over at most `2N+2` calls. `stake-tx-build` makes three network calls, one for the cluster genesis hash, one for the blockhash or the nonce account state, one for the standing of the account it is about to touch. The rest of its work is offline: a 1322-line core module that deduplicates account keys, orders them into the four header groups, encodes compact-u16 lengths, and places signature placeholders. The spec itself puts hand-built unsigned transactions in Tier 3. One concession, openly: the Kamino side of the reader is a GET plus shaping, kept because the morning check needs that number.
+The spec rejects a single RPC call padded into WASM, and that test is quantitative. `stake-monitor` merges four RPC methods over at most `2N+2` calls. `stake-tx-build` makes three network calls, one for the cluster genesis hash, one for the blockhash or the nonce account state, one for the standing of the account it is about to touch. The rest of its work is offline: a 1371-line core module that deduplicates account keys, orders them into the four header groups, encodes compact-u16 lengths, and places signature placeholders. The spec itself puts hand-built unsigned transactions in Tier 3. One concession, openly: the Kamino side of the reader is a GET plus shaping, kept because the morning check needs that number.
 
 ## What fought me at the component boundary
 
@@ -270,7 +270,9 @@ host still installs 0.2.0, because `PluginManifest` at that commit derives plain
 `Deserialize` and discards the unknown table without complaint, and it then
 injects the old flat string map, so every configured call fails. Plugin version
 and host pin move together; [`REPRODUCE.md`](REPRODUCE.md) section 1.1 says which
-pairs with which. No post-#9126 host was built here, and that section says so.
+pairs with which. When this paragraph was written no post-#9126 host had been
+built; one was built later the same week, and the update near the end of this
+document records what the three components did on it.
 
 Numbers in this document were re-measured after the migration: 241 host tests,
 59 of them on refusal and unknown paths.
@@ -321,7 +323,7 @@ implementation was not found in the linker: instance export `log-record` has the
 wrong type: type mismatch for field action: expected enum of 38 names, found 37
 ```
 
-The host added a variant to the log-action enum after these components were
+The host added a variant to the plugin-action enum after these components were
 compiled, and the vendored `wit/v0` copy they bind against still had the older
 one. This is the same breakage the versioning report filed upstream describes:
 adding a case to an existing enum breaks previously compiled plugins. The
@@ -329,7 +331,11 @@ vendored interface is now aligned with the host's and all three components are
 rebuilt against it. Each one then instantiates, receives its typed config, and
 runs: `lending-health` returns a live Kamino position, and the other two reach
 their RPC call and fail only because the probe pointed them at an unreachable
-endpoint. Component sizes moved with the rebuild and are re-measured above.
+endpoint. Aligning the contract moved every component size by thirteen bytes, and
+a later edit to one refusal string in `stake-tx-build` added forty-eight more to
+that component alone. A run of `demo/run-demo.sh` on 31 August 2026 prints 400277,
+354091 and 380710 bytes for `lending_health`, `stake_monitor` and
+`stake_tx_build`, and the README carries the same three numbers from that run.
 
 **Update, 31 August 2026: the liquidation-price skill said the wrong arithmetic.**
 The paragraph above notes that the `7.0% buffer` in the Telegram line is the

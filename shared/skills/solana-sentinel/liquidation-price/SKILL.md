@@ -20,8 +20,13 @@ compiled code.
 
 Use it when a position comes back `WARN` or `CRITICAL` and the operator asks what
 price would put them in trouble. Skip it for a position marked `no debt`, which
-has no liquidation price, and skip it for `UNKNOWN`, where the buffer itself is
-not established.
+has no liquidation price. Skip it whenever the distance field reads `LTV n/a`,
+because that line carries no pair to divide and the arithmetic below has no
+inputs. That rendering appears under two different verdicts and they are answered
+differently: on an `[UNKNOWN]` line the basis was never established, so say so and
+stop; on a `[CRITICAL]` line carrying `maint basis unavailable; flagged unhealthy`
+the protocol's own risk engine has condemned the account, so relay that verdict
+exactly as printed and attach no price to it.
 
 **The report does not name the collateral asset, and this conversion only holds
 for collateral that moves with SOL.** `lending_health` prints the protocol, the
@@ -65,17 +70,21 @@ Read `usdPrice`. Ignore the rest unless the operator asks about the 24 hour move
 
 ## The arithmetic
 
-The report gives two LTV figures, not a buffer. Derive the buffer from them:
+On any line whose distance field is not `LTV n/a`, the report gives two LTV
+figures rather than a buffer. Derive the buffer from them:
 
 ```
 buffer = (liquidation LTV − current LTV) / liquidation LTV
 liquidation price = current price × (1 − buffer)
 ```
 
-The division matters. Subtracting the two percentages gives the gap in
-percentage points, which is a different number and always the smaller one, so
-using it puts the liquidation price too high and reports the position as safer
-than it is.
+The division matters whenever the liquidation LTV is below 100%. There,
+subtracting the two percentages gives the gap in percentage points, a smaller
+number than the buffer, so using it puts the liquidation price too high and
+reports the position as safer than it is. A MarginFi `maint LTV` line is the
+exception: its liquidation LTV is 100% by construction, so the two routes give
+the same buffer there. Divide in both cases and the formula never needs a
+per-protocol branch.
 
 Worked: `LTV 63.2% of 72.9% liq` gives `(72.9 − 63.2) / 72.9 = 0.133`. With SOL
 at 72.90 that is `72.90 × 0.867 = 63.20`. Report it as a price and as a
