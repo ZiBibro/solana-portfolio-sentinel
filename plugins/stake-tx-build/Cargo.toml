@@ -34,7 +34,7 @@ waki = { version = "0.5.1", features = ["json"] }
 # needs a system OpenSSL that a clean Windows box does not have. The pieces
 # below carry the same encoding logic with no native dependency.
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-solana-hash = "2"
+solana-hash = "4"
 solana-instruction = { version = "2", features = ["std"] }
 solana-message = { version = "2", features = ["bincode"] }
 solana-pubkey = "2"
