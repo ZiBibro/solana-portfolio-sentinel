@@ -1,0 +1,34 @@
+version: 2
+
+# Each plugin is its own workspace with its own Cargo.lock, so cargo needs one
+# entry per directory: a single root entry would see none of them.
+#
+# Monthly rather than weekly on purpose. This repository is finished work, and
+# the useful signal here is a security advisory or a contract break, not a
+# steady drip of patch bumps that nobody merges.
+updates:
+  - package-ecosystem: cargo
+    directory: /plugins/lending-health
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: cargo
+    directory: /plugins/stake-monitor
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: cargo
+    directory: /plugins/stake-tx-build
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+
+  # The workflow pins actions by commit SHA, which is the right call and also
+  # the reason they can never move on their own.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3

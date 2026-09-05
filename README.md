@@ -272,6 +272,16 @@ Hosts are exact, and subdomains are not implied. There is no wildcard, and
 `stake-monitor` and `stake-tx-build` need the RPC host alone.
 [`REPRODUCE.md`](REPRODUCE.md) carries the full template and trap 6.
 
+**Support model.** This is finished bounty work, not a maintained product, and
+the honest statement of what that means is short. The components track the
+contract upstream publishes, and CI checks that claim on every push and once a
+month: `tools/check-wit-drift.sh` compares the vendored `plugin-action` enum
+with the one in `zeroclaw-labs/zeroclaw` on `master` and fails the build when
+they diverge. A red badge here therefore means the host moved and these packages
+need re-vendoring, which is a thing you can see without running anything. What
+it does not promise is a same-day fix: the trigger for work is a break or a
+question, never a calendar.
+
 **These components are built for a current host, and the WIT contract they bind
 is what decides that.** They bind `world tool-plugin`, which imports `logging`
 alone, and the vendored `logging.wit` here carries the same 38-name
