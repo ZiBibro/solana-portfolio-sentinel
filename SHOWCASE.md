@@ -345,10 +345,25 @@ and subtraction is the derivation it reaches for. The skill now derives the
 buffer from the two printed LTV figures by division, states why the subtraction
 is wrong, and carries a worked example of both. Nothing above this line is edited.
 
-Of the nine reports, six are closed, two now have a fix open, and
+Of the nine reports, seven are closed,
+[#9653](https://github.com/zeroclaw-labs/zeroclaw/issues/9653) has a fix approved
+and awaiting merge, and
 [#9655](https://github.com/zeroclaw-labs/zeroclaw/issues/9655) on approval-card
 position has [PR #10004](https://github.com/zeroclaw-labs/zeroclaw/pull/10004)
 open from an outside contributor.
+
+**Update, 6 September 2026: the first of the two fixes is in `master`.**
+[PR #10490](https://github.com/zeroclaw-labs/zeroclaw/pull/10490) was merged on
+3 September, closing #9654, and shipped in release `v0.8.5` on 5 September. Its
+sibling [PR #10491](https://github.com/zeroclaw-labs/zeroclaw/pull/10491) was
+approved on 5 September by a second maintainer after a review round that found a
+real defect in the first revision: the trust-store read held the request's
+connection lease past its own deadline. The repair moved that read onto the
+blocking pool and left the wait under the existing deadline; the plugin library
+suite went from 182 tests to 185. The parent egress PR #9582 it was stacked on
+merged on 1 September, and the `stacked` and `do-not-merge` holds came off with
+the approval. What that egress PR changed for operators is written up as trap 6
+in [`REPRODUCE.md`](REPRODUCE.md).
 
 ## Honest limits
 

@@ -250,6 +250,28 @@ zeroclaw plugin install .
 The `.wasm` must sit beside `manifest.toml` when the installer runs, which is
 why it is copied up from `target/`. Built artifacts are not committed here.
 
+**On a host built after 1 September 2026, installing is not enough to reach the
+network.** [zeroclaw#9582](https://github.com/zeroclaw-labs/zeroclaw/pull/9582)
+made `http_client` grant the HTTP surface and nothing more: reachability comes
+only from the operator's `egress_hosts` list on that instance's entry, and an
+empty list reaches nothing. Every call then fails with
+`zeroclaw plugin egress policy: destination not permitted`, before DNS, while
+install and `plugin list` still report success. Each entry needs its own line,
+a plaintext sibling of `[plugins.entries.config]`, outside the config map:
+
+```toml
+[[plugins.entries]]
+name = "zpi1_WyJsZW5kaW5nLWhlYWx0aCIsInRvb2wiLCJsZW5kaW5nLWhlYWx0aCJd"
+egress_hosts = ["api.kamino.finance", "your-rpc-host.example"]
+
+[plugins.entries.config]
+# ...
+```
+
+Hosts are exact, and subdomains are not implied. There is no wildcard, and
+`stake-monitor` and `stake-tx-build` need the RPC host alone.
+[`REPRODUCE.md`](REPRODUCE.md) carries the full template and trap 6.
+
 **These components are built for a current host, and the WIT contract they bind
 is what decides that.** They bind `world tool-plugin`, which imports `logging`
 alone, and the vendored `logging.wit` here carries the same 38-name
@@ -306,10 +328,15 @@ endpoints, including a mainnet transaction and a MarginFi account. One MarginFi
 fixture is synthetic and labelled as such in its doc comment, because no live
 capture carried a written maintenance pair.
 
-A note for operators behind TLS-intercepting antivirus or corporate proxies:
+A note for operators behind TLS-intercepting antivirus or corporate proxies: on
+hosts that predate
+[zeroclaw#10491](https://github.com/zeroclaw-labs/zeroclaw/pull/10491),
 `wasmtime-wasi-http` trusts the bundled webpki roots only, so intercepted HTTPS
 fails with `TlsProtocolError` for any HTTP-using plugin. Worth knowing before
-debugging a plugin that works everywhere except one machine.
+debugging a plugin that works everywhere except one machine. That PR, approved on
+5 September 2026, teaches the plugin path to read the machine's trust store as
+well, so on a host carrying it an operator-installed CA works for plugins the way
+it already does for provider requests.
 
 ## Relationship to the official registry
 
@@ -318,8 +345,10 @@ The same code was proposed to
 on 18 July. The bounty listing was updated on 22 July asking contributors not to
 open registry pull requests during the bounty and stating that registry merges
 happen separately after judging, so on 1 August that PR was moved to draft with a
-comment explaining the timing. It keeps its history and stays out of the
-maintainers' review queue meanwhile.
+comment explaining the timing. Judging closed on 21 August, and the PR came back
+out of draft on 30 August. It has had no review since, and its validation
+workflow has never run: runs on a fork branch sit at `action_required` until a
+maintainer approves them.
 
 That registry is not open intake by design, so this repository is where the
 plugins live and get released regardless of how the review eventually lands.

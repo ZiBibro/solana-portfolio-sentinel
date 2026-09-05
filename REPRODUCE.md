@@ -181,8 +181,11 @@ out `9dbf85b` when you reach section 3, or copy the pinned host's contract into
 this repository and rebuild with the recipe below.
 
 **If you built a current host,** you need no rebuild and no different version of
-this code. The recipe below is here for whenever you move the host again; it
-copies the host's contract into this repository and rebuilds:
+this code, but you do need one extra line of config per plugin: a host built
+after 1 September 2026 reaches no network destination that
+`plugins.entries[].egress_hosts` does not name. The section 6 template carries
+it; trap 6 explains it. The recipe below is here for whenever you move the host
+again; it copies the host's contract into this repository and rebuilds:
 
 ```bash
 cp -r ../zeroclaw/wit/v0 ./wit/
@@ -658,6 +661,13 @@ auto_discover = true
 [[plugins.entries]]
 # The instance key, not the package name. See the note above.
 name = "zpi1_WyJsZW5kaW5nLWhlYWx0aCIsInRvb2wiLCJsZW5kaW5nLWhlYWx0aCJd"
+# Network reachability, and the only thing that grants it. Since zeroclaw#9582
+# the `http_client` permission gives a plugin the HTTP surface and nothing more:
+# this list is what makes a destination reachable, and an empty list reaches
+# nothing. Hosts are exact, a host does not imply its subdomains, ports are not
+# part of an entry, and there is no wildcard. Replace the RPC entry with the
+# host part of your `rpc_url`, without the scheme. See trap 6.
+egress_hosts = ["api.kamino.finance", "REPLACE_WITH_YOUR_RPC_HOST"]
 
 [plugins.entries.config]
 # JSON array of "label:pubkey" or bare pubkey, as a quoted string. Required.
@@ -676,6 +686,13 @@ timeout_secs = "10"
 [[plugins.entries]]
 # The instance key, not the package name. See the note above.
 name = "zpi1_WyJzdGFrZS1tb25pdG9yIiwidG9vbCIsInN0YWtlLW1vbml0b3IiXQ"
+# Network reachability, and the only thing that grants it. Since zeroclaw#9582
+# the `http_client` permission gives a plugin the HTTP surface and nothing more:
+# this list is what makes a destination reachable, and an empty list reaches
+# nothing. Hosts are exact, a host does not imply its subdomains, ports are not
+# part of an entry, and there is no wildcard. Replace the RPC entry with the
+# host part of your `rpc_url`, without the scheme. See trap 6.
+egress_hosts = ["REPLACE_WITH_YOUR_RPC_HOST"]
 
 [plugins.entries.config]
 stake_accounts = '["main:REPLACE_WITH_YOUR_STAKE_ACCOUNT_PUBKEY"]'
@@ -686,6 +703,13 @@ timeout_secs = "10"
 [[plugins.entries]]
 # The instance key, not the package name. See the note above.
 name = "zpi1_WyJzdGFrZS10eC1idWlsZCIsInRvb2wiLCJzdGFrZS10eC1idWlsZCJd"
+# Network reachability, and the only thing that grants it. Since zeroclaw#9582
+# the `http_client` permission gives a plugin the HTTP surface and nothing more:
+# this list is what makes a destination reachable, and an empty list reaches
+# nothing. Hosts are exact, a host does not imply its subdomains, ports are not
+# part of an entry, and there is no wildcard. Replace the RPC entry with the
+# host part of your `rpc_url`, without the scheme. See trap 6.
+egress_hosts = ["REPLACE_WITH_YOUR_RPC_HOST"]
 
 [plugins.entries.config]
 stake_accounts = '["main:REPLACE_WITH_YOUR_STAKE_ACCOUNT_PUBKEY"]'
@@ -1321,12 +1345,18 @@ allowlist. For a funds-adjacent agent, prefer leaving it on and reading the trac
 browser reaches the same endpoint perfectly. Typically on Avast, AVG, Kaspersky or
 ESET with HTTPS scanning on, or behind a corporate TLS-inspecting proxy.
 
-**Cause.** Plugins reach the network through `wasmtime-wasi-http` 45.0.3, whose
-request path trusts the bundled webpki root set rather than the machine's own
-certificate store. An interceptor installs its CA into the OS store, where the
-plugin runtime never looks. Every call fails with `ErrorCode::TlsProtocolError`.
+**Cause.** On hosts that predate
+[zeroclaw#10491](https://github.com/zeroclaw-labs/zeroclaw/pull/10491), plugins
+reach the network through a `wasmtime-wasi-http` request path that trusts the
+bundled webpki root set rather than the machine's own certificate store. An
+interceptor installs its CA into the OS store, where the plugin runtime never
+looks. Every call fails with `ErrorCode::TlsProtocolError`. That PR teaches the
+plugin path to read the machine's trust store as well, so on a host carrying it
+an operator-installed CA works for plugins the way it already works for provider
+requests; if your host has it, this trap does not apply to you.
 
-**This cannot be fixed inside a plugin.** The root set is the host's choice. What
+**On a host without it this cannot be fixed inside a plugin.** The root set is
+the host's choice. What
 these plugins do instead is tell you: all three run network errors through a helper
 that appends, on a TLS error, "(TLS refused: likely antivirus HTTPS inspection or a
 TLS-inspecting proxy, whose CA this runtime does not trust)". You get a direction
@@ -1341,6 +1371,52 @@ the Rust toolchain under the reputation heuristic `FileRepMalware`. The file is 
 stock rustup component from `static.rust-lang.org`. If your wasm build fails at the
 link step with a missing linker, check quarantine and add a folder exception for
 your Rust installation.
+
+
+### Trap 6: on a host built after 1 September 2026, `http_client` alone reaches nothing
+
+**Symptom.** All three plugins install, `plugin list` shows them, the model calls
+one, and every call comes back as an internal error whose text is
+`zeroclaw plugin egress policy: destination not permitted`. The host log carries a
+WARN with `error_key = plugin_egress_denied`. Nothing is wrong with the package,
+the manifest, or the config map.
+
+**Cause.** [zeroclaw#9582](https://github.com/zeroclaw-labs/zeroclaw/pull/9582),
+merged on 1 September 2026, replaced `wasmtime_wasi_http`'s default hooks with a
+host-owned egress policy. Before it, a plugin holding `http_client` composed its
+own requests and the host let them out. After it, that permission grants the HTTP
+*surface* and nothing else: the only thing that makes any destination reachable is
+the operator's `egress_hosts` list on that instance's entry, and an empty list
+reaches nothing. The refusal happens before DNS, so a wrong hostname and a
+missing grant look identical from inside the guest.
+
+The check is deliberately quiet elsewhere: the declaration is kept out of
+`PluginInfo`, so neither `plugin install` nor `plugin info` mentions it, and the
+problem surfaces only when a tool is actually called.
+
+**Fix.** The template in section 6 already carries the list. If you wrote your
+config before this trap existed, add `egress_hosts` to each
+`[[plugins.entries]]` block, as a plaintext sibling of `[plugins.entries.config]`,
+outside the config map:
+
+```toml
+[[plugins.entries]]
+name = "zpi1_WyJzdGFrZS1tb25pdG9yIiwidG9vbCIsInN0YWtlLW1vbml0b3IiXQ"
+egress_hosts = ["rpc.example.com"]
+
+[plugins.entries.config]
+# ...
+```
+
+Hosts are exact: listing `example.com` does not reach `api.example.com`. Ports
+are not part of an entry either, and there is no wildcard. `lending-health` needs the
+Kamino API host as well as your RPC host. If your RPC endpoint resolves to a
+private, loopback, or link-local address, list it in `egress_allow_private` too;
+that field relaxes the address class only and never widens `egress_hosts`.
+
+**On the pinned `fc8b4d83` host this trap does not exist**, because the policy
+was not there yet. It applies to anyone building the host from `master` after
+1 September 2026, which is the recommended path everywhere else in this document.
 
 ---
 
