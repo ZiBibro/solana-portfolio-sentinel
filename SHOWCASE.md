@@ -365,6 +365,17 @@ merged on 1 September, and the `stacked` and `do-not-merge` holds came off with
 the approval. What that egress PR changed for operators is written up as trap 6
 in [`REPRODUCE.md`](REPRODUCE.md).
 
+**Update, 18 November 2026: all nine reports are closed, each by a merged fix.**
+[PR #10491](https://github.com/zeroclaw-labs/zeroclaw/pull/10491) was merged on
+6 September, closing #9653 on plugin TLS trust.
+[PR #10004](https://github.com/zeroclaw-labs/zeroclaw/pull/10004), the outside
+contribution that puts each tool call's position in its batch on the approval
+card, was merged on 12 September, and
+[#9655](https://github.com/zeroclaw-labs/zeroclaw/issues/9655) was closed as
+completed on 18 November. Both fixes first shipped in release `v0.8.6` on
+18 October. Of the nine fixes, two are my own pull requests, #10490 and #10491.
+Nothing above this line is edited.
+
 ## Honest limits
 
 **The schedule is daily, and a liquidation does not wait for morning.** The brief

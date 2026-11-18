@@ -343,8 +343,8 @@ hosts that predate
 [zeroclaw#10491](https://github.com/zeroclaw-labs/zeroclaw/pull/10491),
 `wasmtime-wasi-http` trusts the bundled webpki roots only, so intercepted HTTPS
 fails with `TlsProtocolError` for any HTTP-using plugin. Worth knowing before
-debugging a plugin that works everywhere except one machine. That PR, approved on
-5 September 2026, teaches the plugin path to read the machine's trust store as
+debugging a plugin that works everywhere except one machine. That PR, merged on
+6 September 2026 and first shipped in `v0.8.6`, teaches the plugin path to read the machine's trust store as
 well, so on a host carrying it an operator-installed CA works for plugins the way
 it already does for provider requests.
 
